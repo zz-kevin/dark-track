@@ -28,14 +28,14 @@ _(Fill these in for real once ingestion is running — these are starting
 targets, not final numbers.)_
 
 - **Fusion accuracy:** correctly associate the same real-world aircraft
-  across both sources within `___` meters and `___` seconds, for `___`% of
+  across both sources within `300` meters and `5` seconds, for `90`% of
   tracks in a test window.
-- **Anomaly detection:** flag an injected "went dark" event within `___`
-  seconds of it occurring, with a false-positive rate under `___`% on a
+- **Anomaly detection:** flag an injected "went dark" event within `15`
+  seconds of it occurring, with a false-positive rate under `5`% on a
   held-out replay set.
-- **Throughput:** sustain fusion + anomaly detection for at least `___`
+- **Throughput:** sustain fusion + anomaly detection for at least `150`
   concurrent tracks with end-to-end (sensor tick → fused output) latency
-  under `___` ms.
+  under `500` ms.
 
 ## Non-goals
 
