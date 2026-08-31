@@ -1,0 +1,32 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# --- Go ---
+/bin/
+*.exe
+*.test
+*.out
+
+# --- Node / web ---
+node_modules/
+dist/
+.env
+.env.local
+
+# --- Data / local state ---
+*.db
+*.sqlite3
+/data/raw/
+/data/replay/
+*.log
+
+# --- OS / editor ---
+.DS_Store
+.vscode/
+.idea/
+*.swp
