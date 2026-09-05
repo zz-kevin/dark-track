@@ -80,5 +80,39 @@ Record real decisions here as they're made, in the format:
 > deterministically, and avoids serializing insert latency across many
 > aircraft in one poll cycle.
 
+> **Decision:** Constant-velocity Kalman filter per track, with per-source
+> measurement noise (`R_adsb` << `R_radar`), over an alpha-beta filter.
+> **Alternatives considered:** alpha-beta filter with separate hand-tuned
+> gains per source.
+> **Why:** the project's actual point is trusting one source more than the
+> other — a Kalman filter's `R` matrix does that natively per update,
+> where alpha-beta has no equivalent lever without hand-hacking it. Full
+> reasoning in `docs/FUSION.md`.
+
+> **Decision:** Hungarian algorithm (`scipy.optimize.linear_sum_assignment`)
+> for associating a poll cycle's anonymous ticks to tracks, not greedy
+> nearest-neighbor.
+> **Alternatives considered:** greedy nearest-neighbor.
+> **Why:** `radar_sim.py` derives a whole poll cycle's contacts from one
+> OpenSky snapshot, so ambiguous ticks close together in a busy region are
+> common in the same batch — exactly where greedy assignment can steal a
+> good match from a tick with no other candidate. Measured cost is
+> negligible at this project's track counts.
+
+> **Decision:** Fusion processes each cycle's identified ADS-B ticks
+> before batch-associating the anonymous ones (radar + blank-callsign
+> ADS-B), rather than a fully time-ordered merge of both streams.
+> **Alternatives considered:** merge all new ticks globally by
+> `observed_at` and process one at a time.
+> **Why:** keeps the Hungarian association a real batch operation each
+> cycle instead of degrading to one-at-a-time greedy assignment. Traded
+> away: a large `--since-id` backfill processed in a single pass can let
+> multiple historical radar contacts from the same aircraft compete for
+> one already-collapsed track. Measured: ~26% radar match rate on a
+> 66-tick single-batch backfill vs. ~74% replaying the same data live in
+> small poll cycles. Not a concern for normal live operation; noted as a
+> known limitation in `docs/FUSION.md` rather than fixed, since it only
+> bites bulk backfills.
+
 This doc is what gets read in an interview — keep it honest, including the
 tradeoffs that were made for time rather than "the right" reason.

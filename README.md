@@ -31,7 +31,7 @@ success criteria.
 
 - [x] Week 1 — foundations (this scaffold, live data proof, design doc)
 - [x] Weeks 2–4 — ingestion pipeline
-- [ ] Weeks 5–9 — fusion & entity resolution
+- [x] Weeks 5–9 — fusion & entity resolution
 - [ ] Weeks 10–11 — anomaly detection
 - [ ] Weeks 12–13 — visualization & demo UI
 - [ ] Weeks 14–15 — hardening, benchmarks, writeup
@@ -47,10 +47,14 @@ python3 ingestion/db.py                  # creates the raw_ticks table
 
 python3 ingestion/opensky_poll.py        # real ADS-B feed -> raw_ticks
 python3 ingestion/radar_sim.py           # synthetic radar feed, derived from the above
+
+python3 fusion/db.py                     # creates fused_tracks / fused_track_events
+python3 fusion/engine.py                 # Kalman filter + gating + association -> fused picture
 ```
 
-See [`ingestion/README.md`](ingestion/README.md) for the full set of
-scripts, including `replay.py`.
+See [`ingestion/README.md`](ingestion/README.md) and
+[`fusion/README.md`](fusion/README.md) for the full set of scripts and
+tuning flags.
 
 ## License
 
