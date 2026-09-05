@@ -29,8 +29,8 @@ success criteria.
 
 ## Status
 
-- [ ] Week 1 — foundations (this scaffold, live data proof, design doc)
-- [ ] Weeks 2–4 — ingestion pipeline
+- [x] Week 1 — foundations (this scaffold, live data proof, design doc)
+- [x] Weeks 2–4 — ingestion pipeline
 - [ ] Weeks 5–9 — fusion & entity resolution
 - [ ] Weeks 10–11 — anomaly detection
 - [ ] Weeks 12–13 — visualization & demo UI
@@ -39,7 +39,18 @@ success criteria.
 
 ## Running it
 
-_Not yet — this section gets filled in once `ingestion/` has something that runs._
+```
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+createdb dark_track                     # local Postgres, no auth
+python3 ingestion/db.py                  # creates the raw_ticks table
+
+python3 ingestion/opensky_poll.py        # real ADS-B feed -> raw_ticks
+python3 ingestion/radar_sim.py           # synthetic radar feed, derived from the above
+```
+
+See [`ingestion/README.md`](ingestion/README.md) for the full set of
+scripts, including `replay.py`.
 
 ## License
 

@@ -51,5 +51,34 @@ Record real decisions here as they're made, in the format:
 > **Alternatives considered:** what else was on the table
 > **Why:** the actual reasoning, including constraints (time, complexity)
 
+> **Decision:** Plain Postgres for `raw_ticks` (lat/lon as `double precision`
+> columns), not PostGIS.
+> **Alternatives considered:** PostGIS with a `geography(Point)` column and
+> spatial indexing.
+> **Why:** at this project's scale (single region, a few hundred tracks max)
+> a plain lat/lon pair with a btree index on `(source, observed_at)` is
+> enough for both ingestion and the gating step in `fusion/`. PostGIS is an
+> extra install/ops dependency that only pays for itself once queries need
+> real spatial predicates (radius search, polygon containment) — revisit if
+> `fusion/`'s gating turns out to need that.
+
+> **Decision:** Radar simulator derives contacts from ticks already written
+> to `raw_ticks` by the OpenSky poller (polls the table), rather than
+> independently polling OpenSky itself.
+> **Alternatives considered:** Have `radar_sim.py` call the OpenSky API
+> directly and apply noise inline, same as the poller.
+> **Why:** guarantees the two sources are actually derived from the same
+> underlying truth (required by `docs/PROBLEM.md`), and decouples the two
+> processes' poll cadence — the radar "sensor" can run on its own schedule
+> without doubling OpenSky API calls against the anonymous rate limit.
+
+> **Decision:** Radar latency jitter is simulated by writing a
+> future-shifted `observed_at` rather than literally sleeping per tick.
+> **Alternatives considered:** Real `time.sleep()` before inserting each
+> contact.
+> **Why:** makes a fixed `--seed` replay run reproduce identical timing
+> deterministically, and avoids serializing insert latency across many
+> aircraft in one poll cycle.
+
 This doc is what gets read in an interview — keep it honest, including the
 tradeoffs that were made for time rather than "the right" reason.

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-opensky_poll.py — Dark Track / ingestion: proof-of-life script for the
-OpenSky Network live ADS-B feed.
+opensky_poll.py — Dark Track / ingestion: OpenSky Network live ADS-B feed.
 
-Polls OpenSky's public `/states/all` endpoint for a bounding box and prints
+Polls OpenSky's public `/states/all` endpoint for a bounding box, prints
 callsign, lat/lon, altitude, and velocity for every aircraft currently
-inside it, once every POLL_SECONDS. This is the "week 1" task from the
-roadmap — nothing else in the project matters until this runs cleanly.
+inside it, and writes each state vector into the shared `raw_ticks` table
+(source='adsb') so fusion/replay can consume it later. Run
+`python3 db.py` once first to create the table.
 
 No API key required at this usage level — OpenSky allows anonymous
 requests at a lower rate limit (roughly one request per 10s), which is
@@ -18,6 +18,8 @@ import time
 from datetime import datetime, timezone
 
 import requests
+
+import db
 
 # ---- Configure your bounding box here ----
 # Default below is New York City metro. To use your own region: open
@@ -34,10 +36,12 @@ OPENSKY_URL = "https://opensky-network.org/api/states/all"
 # OpenSky state vector field indices (from the public API docs) — named
 # here so the rest of the script doesn't have unexplained magic numbers.
 IDX_CALLSIGN = 1
+IDX_TIME_POSITION = 3
 IDX_LON = 5
 IDX_LAT = 6
 IDX_BARO_ALT = 7
 IDX_VELOCITY = 9
+IDX_TRUE_TRACK = 10  # heading, degrees clockwise from north
 
 
 def fetch_states():
@@ -47,9 +51,7 @@ def fetch_states():
     return resp.json()
 
 
-def print_states(data):
-    ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
-    states = data.get("states") or []
+def print_states(states, ts):
     if not states:
         print(f"[{ts}] no aircraft currently in the bounding box")
         return
@@ -63,6 +65,34 @@ def print_states(data):
         print(f"   {callsign:<10} lat={lat} lon={lon} alt={alt_str} vel={vel_str}")
 
 
+def to_rows(data, fetched_at):
+    """Turn a raw OpenSky response into raw_ticks rows. Skips states with no
+    position fix -- those aren't a usable tick for fusion or replay."""
+    rows = []
+    for s in data.get("states") or []:
+        lat, lon = s[IDX_LAT], s[IDX_LON]
+        if lat is None or lon is None:
+            continue
+        callsign = (s[IDX_CALLSIGN] or "").strip() or None
+        time_position = s[IDX_TIME_POSITION]
+        observed_at = (
+            datetime.fromtimestamp(time_position, tz=timezone.utc)
+            if time_position is not None
+            else fetched_at
+        )
+        rows.append({
+            "source": "adsb",
+            "external_id": callsign,
+            "lat": lat,
+            "lon": lon,
+            "altitude_m": s[IDX_BARO_ALT],
+            "velocity_mps": s[IDX_VELOCITY],
+            "heading_deg": s[IDX_TRUE_TRACK],
+            "observed_at": observed_at,
+        })
+    return rows
+
+
 def main():
     print(
         f"Polling OpenSky every {POLL_SECONDS}s for box "
@@ -70,8 +100,13 @@ def main():
     )
     while True:
         try:
+            fetched_at = datetime.now(timezone.utc)
             data = fetch_states()
-            print_states(data)
+            states = data.get("states") or []
+            print_states(states, fetched_at.strftime("%H:%M:%S"))
+            rows = to_rows(data, fetched_at)
+            if rows:
+                db.insert_ticks(rows)
         except requests.exceptions.RequestException as e:
             print(f"request failed: {e}", file=sys.stderr)
 
