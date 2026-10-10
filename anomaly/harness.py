@@ -68,7 +68,7 @@ def _load_module(name, path):
 ingestion_db = _load_module("ingestion_db", INGESTION_DIR / "db.py")
 
 import inject  # noqa: E402
-from detectors import kinematic_inconsistency, went_dark  # noqa: E402
+from detectors import kinematic_inconsistency, went_dark, went_dark_thresholds  # noqa: E402
 
 DEFAULTS = dict(
     poll_seconds=3.0,
@@ -132,6 +132,13 @@ def run_scenario(ticks, params):
     """Runs the real fusion engine + both real detectors over `ticks` in
     simulated poll cycles. Returns a list of detected anomaly dicts:
     {kind, track_id, external_id, detected_at}."""
+    # Same flat-earth reference the live engine would pick: the center of
+    # the data, not geo.py's NYC default.
+    if ticks:
+        fusion_geo.set_reference(
+            sum(t["lat"] for t in ticks) / len(ticks),
+            sum(t["lon"] for t in ticks) / len(ticks),
+        )
     tracks = {}
     callsign_to_track = {}
     kinematic_state = {}
@@ -147,6 +154,8 @@ def run_scenario(ticks, params):
                 "raw_id": row["id"], "external_id": row["external_id"],
                 "x": x, "y": y, "observed_at": row["observed_at"],
                 "r_std": r_std, "source": row["source"],
+                # Live fusion seeds new tracks with the reported velocity.
+                "v0": fusion_engine.reported_velocity(row),
             }
             (adsb if row["source"] == "adsb" else radar).append(tick)
 
@@ -279,22 +288,47 @@ def parse_args():
     return p.parse_args()
 
 
+def window_interval(ticks):
+    """Median per-aircraft ADS-B revisit interval within the window -- the
+    same quantity the live engines measure from the database."""
+    last, gaps = {}, []
+    for t in sorted((t for t in ticks if t["source"] == "adsb"), key=lambda t: t["observed_at"]):
+        key = t.get("icao24") or t["external_id"]
+        if key in last:
+            gap = (t["observed_at"] - last[key]).total_seconds()
+            if 0 < gap < 300:
+                gaps.append(gap)
+        last[key] = t["observed_at"]
+    return sorted(gaps)[len(gaps) // 2] if gaps else None
+
+
+def scaled_params(ticks):
+    interval = window_interval(ticks) or 10.0
+    gate, ttl = fusion_engine.scaled_gates(interval)
+    silence, recency = went_dark_thresholds(interval)
+    print(f"window adsb interval {interval:.0f}s -> gate {gate:.0f}s, ttl {ttl:.0f}s, "
+          f"silence {silence:.0f}s, radar recency {recency:.0f}s")
+    return {**DEFAULTS, "gate_staleness_s": gate, "track_ttl_s": ttl,
+            "adsb_silence_s": silence, "radar_recency_s": recency}
+
+
 def main():
     args = parse_args()
     ticks = ingestion_db.ticks_in_window(args.start, args.end)
     if not ticks:
         print("no ticks in that window")
         return
+    params = scaled_params(ticks)
     kind = "went_dark" if args.kind == "went_dark" else "kinematic_inconsistency"
 
     if args.mode == "sweep":
-        sweep(args.kind, ticks, DEFAULTS, args.latency_budget_s)
+        sweep(args.kind, ticks, params, args.latency_budget_s)
     else:
         if args.kind == "went_dark":
             modified, gt = inject.inject_went_dark(ticks, args.external_id)
         else:
             modified, gt = inject.inject_kinematic_jump(ticks, args.external_id)
-        detections = run_scenario(modified, DEFAULTS)
+        detections = run_scenario(modified, params)
         tp, fps = score(detections, gt, args.latency_budget_s)
         print(f"ground truth: {gt}")
         print(f"true positive: {tp}")

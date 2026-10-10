@@ -166,6 +166,31 @@ def insert_fused_events(events):
         )
 
 
+def adsb_update_interval(window_min=15):
+    """Median seconds between consecutive ADS-B ticks of the same aircraft
+    over the last window_min minutes -- i.e. the poller's effective
+    cadence, which fusion/anomaly thresholds have to scale with. None if
+    there isn't enough data yet. Gaps over 5 min (aircraft left and came
+    back) are ignored."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY gap)
+            FROM (
+                SELECT EXTRACT(EPOCH FROM observed_at - LAG(observed_at)
+                       OVER (PARTITION BY icao24 ORDER BY observed_at)) AS gap
+                FROM raw_ticks
+                WHERE source = 'adsb' AND icao24 IS NOT NULL
+                  AND observed_at > now() - make_interval(mins => %s)
+            ) g
+            WHERE gap > 0 AND gap < 300
+            """,
+            (window_min,),
+        )
+        v = cur.fetchone()[0]
+        return float(v) if v is not None else None
+
+
 if __name__ == "__main__":
     init_schema()
     print(f"schema applied to {DATABASE_URL}")

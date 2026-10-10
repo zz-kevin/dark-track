@@ -11,6 +11,17 @@ across a whole batch of ticks at once, which track-tick pairing
 minimizes total distance -- the Hungarian algorithm (via
 scipy.optimize.linear_sum_assignment), not greedy nearest-neighbor.
 
+The distance gate is the larger of a fixed radius (max_dist_m) and a
+covariance gate on the filter's own innovation covariance S = HPH^T + R
+(squared Mahalanobis distance <= CHI2_GATE). The fixed radius alone was
+tuned for radar contacts that arrive seconds after the track's last
+update; when ADS-B drops on a 45s-cadence feed, the next radar contact is
+judged against a 45s prediction whose real error was measured at median
+954m / p95 3.6km -- an 800m radius rejected most of them, so the track
+never got the radar corroboration the went-dark detector needs. The
+covariance gate widens exactly when the filter is genuinely unsure and
+never makes the gate tighter than max_dist_m.
+
 Why Hungarian over greedy nearest-neighbor: radar_sim derives all of a
 poll cycle's contacts from the same OpenSky snapshot, so multiple
 ambiguous ticks routinely land in the same batch. Greedy assignment
@@ -24,13 +35,13 @@ common in busy airspace.
 
 import math
 
+import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 UNGATED_COST = 1e9
-
-
-def _distance(a, b):
-    return math.hypot(a[0] - b[0], a[1] - b[1])
+# Chi-square, 2 degrees of freedom, 99.9%: a true match falls outside this
+# only 1 time in 1000 if the filter's covariance is honest.
+CHI2_GATE = 13.82
 
 
 def associate(ticks, tracks, max_dist_m, max_staleness_s):
@@ -56,10 +67,14 @@ def associate(ticks, tracks, max_dist_m, max_staleness_s):
             # the staleness gate would tolerate in either direction.
             if abs(age) > max_staleness_s:
                 continue
-            predicted = track.predicted_position(tick["observed_at"])
-            dist = _distance(predicted, (tick["x"], tick["y"]))
-            if dist <= max_dist_m:
-                cost[i][j] = dist
+            x_pred, P_pred = track.kf.peek_predict(age)
+            innovation = np.array([tick["x"] - x_pred[0], tick["y"] - x_pred[1]])
+            dist = float(math.hypot(*innovation))
+            if dist > max_dist_m:
+                S = P_pred[:2, :2] + np.eye(2) * tick["r_std"] ** 2
+                if float(innovation @ np.linalg.solve(S, innovation)) > CHI2_GATE:
+                    continue
+            cost[i][j] = dist
 
     row_ind, col_ind = linear_sum_assignment(cost)
 

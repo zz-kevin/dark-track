@@ -52,6 +52,17 @@ def went_dark(tracks, now, adsb_silence_s=30.0, radar_recency_s=10.0):
     return out
 
 
+def went_dark_thresholds(interval_s):
+    """(adsb_silence_s, radar_recency_s) for a given ADS-B update interval.
+    Silence must exceed one normal revisit plus jitter, or every aircraft
+    "goes dark" between polls; radar recency must span a revisit, or an
+    open episode flaps closed/open each cycle (each reopen scoring as a new
+    alert). Floors are the ~10s-polling values (30s / 10s). Measured on
+    45s-cadence Gulf data with the unscaled 30s/10s: went-dark recall
+    1.6%."""
+    return max(30.0, 1.5 * interval_s), max(10.0, 1.3 * interval_s)
+
+
 def kinematic_inconsistency(events, state, sigma_mult=4.0, consecutive=2):
     """Flags a track whose Kalman innovation (residual_m, already computed
     per-update by fusion/track.py's Track.apply) is more than sigma_mult

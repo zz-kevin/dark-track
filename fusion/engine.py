@@ -163,10 +163,27 @@ def persist(tracks, touched_ids, now):
         })
 
 
+def scaled_gates(interval_s):
+    """Staleness gate and track TTL for a given ADS-B update interval. The
+    gate has to outlast one full sensor revisit: when a transponder drops,
+    the next radar contact arrives ~one interval after the track's last
+    update, and a shorter gate turns it into a new anonymous track instead
+    of the went-dark track it belongs to. Floors are the values tuned for
+    ~10s polling, so NYC behaviour is unchanged."""
+    return max(30.0, 2.0 * interval_s), max(120.0, 3.0 * interval_s)
+
+
 def run(poll_seconds, gate_dist_m, gate_staleness_s, track_ttl_s,
         r_adsb_std_m, r_radar_std_m, accel_std, since_id_adsb, since_id_radar):
     cursor_adsb = since_id_adsb if since_id_adsb is not None else db.latest_raw_id("adsb")
     cursor_radar = since_id_radar if since_id_radar is not None else db.latest_raw_id("radar")
+    interval = db.adsb_update_interval()
+    if gate_staleness_s is None or track_ttl_s is None:
+        auto_gate, auto_ttl = scaled_gates(interval or 10.0)
+        gate_staleness_s = gate_staleness_s if gate_staleness_s is not None else auto_gate
+        track_ttl_s = track_ttl_s if track_ttl_s is not None else auto_ttl
+    print(f"adsb update interval: "
+          f"{f'{interval:.0f}s (measured)' if interval else 'unknown, assuming 10s'}")
     center = db.recent_center()
     if center:
         geo.set_reference(*center)
@@ -243,10 +260,12 @@ def parse_args():
     p.add_argument("--gate-dist-m", type=float, default=800.0,
                     help="max distance between a track's predicted position "
                          "and a tick for them to be association candidates")
-    p.add_argument("--gate-staleness-s", type=float, default=30.0,
-                    help="don't gate against a track not updated within this long")
-    p.add_argument("--track-ttl-s", type=float, default=120.0,
-                    help="retire a track after this long with no update")
+    p.add_argument("--gate-staleness-s", type=float, default=None,
+                    help="don't gate against a track not updated within this long "
+                         "(default: scaled to the measured ADS-B interval, min 30s)")
+    p.add_argument("--track-ttl-s", type=float, default=None,
+                    help="retire a track after this long with no update "
+                         "(default: scaled to the measured ADS-B interval, min 120s)")
     p.add_argument("--r-adsb-std-m", type=float, default=20.0,
                     help="assumed ADS-B position measurement noise, meters")
     p.add_argument("--r-radar-std-m", type=float, default=150.0,

@@ -26,18 +26,24 @@ import time
 from datetime import datetime, timezone
 
 import db
-from detectors import kinematic_inconsistency, went_dark
+from detectors import kinematic_inconsistency, went_dark, went_dark_thresholds
 
 
 def run(poll_seconds, adsb_silence_s, radar_recency_s,
         sigma_mult, consecutive, since_id_events):
+    interval = db.adsb_update_interval()
+    auto_silence, auto_recency = went_dark_thresholds(interval or 10.0)
+    adsb_silence_s = adsb_silence_s if adsb_silence_s is not None else auto_silence
+    radar_recency_s = radar_recency_s if radar_recency_s is not None else auto_recency
+    print(f"adsb update interval: "
+          f"{f'{interval:.0f}s (measured)' if interval else 'unknown, assuming 10s'}")
     cursor = since_id_events if since_id_events is not None else db.latest_event_id()
     kinematic_state = {}
     open_went_dark = db.open_track_ids("went_dark")
 
     print(
-        f"Watching fused picture for went-dark (silence>{adsb_silence_s}s, "
-        f"radar<{radar_recency_s}s) and kinematic inconsistency "
+        f"Watching fused picture for went-dark (silence>{adsb_silence_s:.0f}s, "
+        f"radar<{radar_recency_s:.0f}s) and kinematic inconsistency "
         f"({sigma_mult}x sigma, {consecutive} consecutive), every "
         f"{poll_seconds}s. Ctrl+C to stop.\n"
     )
@@ -108,13 +114,15 @@ HEARTBEAT_S = 60
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--poll-seconds", type=float, default=3.0)
-    p.add_argument("--adsb-silence-s", type=float, default=30.0,
+    p.add_argument("--adsb-silence-s", type=float, default=None,
                     help="ADS-B silence, seconds, before a still-radar-corroborated "
                          "track is flagged went-dark. 10s (naive poll-interval-plus-"
                          "margin guess) was swamped by real OpenSky poll jitter in "
-                         "testing -- see anomaly/README.md")
-    p.add_argument("--radar-recency-s", type=float, default=10.0,
-                    help="radar contact must be this recent for went-dark to fire")
+                         "testing -- see anomaly/README.md. Default: scaled to the "
+                         "measured ADS-B interval (detectors.went_dark_thresholds)")
+    p.add_argument("--radar-recency-s", type=float, default=None,
+                    help="radar contact must be this recent for went-dark to fire "
+                         "(default: scaled to the measured ADS-B interval)")
     p.add_argument("--sigma-mult", type=float, default=4.0,
                     help="normalized-residual threshold for kinematic inconsistency")
     p.add_argument("--consecutive", type=int, default=2,
