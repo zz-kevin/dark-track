@@ -39,11 +39,14 @@ blank-callsign ADS-B tick) can be assigned to a track, it must pass two
 independent gates against that track's *predicted* position at the tick's
 timestamp (`fusion/associate.py`):
 
-- **Distance gate** (`--gate-dist-m`, default 800m): roughly 5x the
+- **Distance gate** (`--gate-dist-m`, default 800m, widened by a
+  covariance gate when the prediction is genuinely that uncertain — see
+  `associate.py`): roughly 5x the
   radar's injected noise std dev — generous enough to survive one bad
   noise draw, tight enough to reject genuinely different aircraft in
   busy airspace.
-- **Staleness gate** (`--gate-staleness-s`, default 30s): a track not
+- **Staleness gate** (`--gate-staleness-s`, default 30s or twice the
+  measured ADS-B update interval, whichever is longer): a track not
   updated within this window isn't considered a live candidate at all,
   identified or not.
 
@@ -134,5 +137,10 @@ track that stops being updated keeps its last-computed confidence in
   but momentarily close together would be gated as candidates for each
   other with no velocity-consistency check to break the tie. The Kalman
   filter's own covariance-weighted (Mahalanobis) distance would handle
-  this more rigorously than the fixed-radius Euclidean gate used here —
-  a reasonable next step if false associations show up in practice.
+  this more rigorously than the fixed-radius Euclidean gate used here.
+  *Partly done:* the gate is now the larger of the 800m radius and a
+  chi-square (99.9%) gate on the innovation covariance, added because at
+  45s ADS-B cadence the fixed radius rejected most radar contacts on a
+  track that had just gone dark (see anomaly/README.md). Assignment cost
+  is still plain Euclidean distance, so the crossing-aircraft case above
+  is unchanged.
