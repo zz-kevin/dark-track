@@ -49,6 +49,9 @@ def insert_tick(
     altitude_m=None,
     velocity_mps=None,
     heading_deg=None,
+    icao24=None,
+    aircraft_type=None,
+    aircraft_variant=None,
 ):
     """Insert one raw tick. `source` is 'adsb' or 'radar'."""
     with get_conn() as conn, conn.cursor() as cur:
@@ -56,17 +59,21 @@ def insert_tick(
             """
             INSERT INTO raw_ticks
                 (source, external_id, lat, lon, altitude_m, velocity_mps,
-                 heading_deg, observed_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                 heading_deg, observed_at, icao24, aircraft_type,
+                 aircraft_variant)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT DO NOTHING
             """,
             (source, external_id, lat, lon, altitude_m, velocity_mps,
-             heading_deg, observed_at),
+             heading_deg, observed_at, icao24, aircraft_type,
+             aircraft_variant),
         )
 
 
 def insert_ticks(rows):
     """Bulk insert. Each row is a dict with the same keys as insert_tick's
-    kwargs (source, lat, lon, observed_at required; rest optional)."""
+    kwargs (source, lat, lon, observed_at required; rest optional). An adsb
+    row already stored for the same (icao24, observed_at) is skipped."""
     if not rows:
         return
     with get_conn() as conn, conn.cursor() as cur:
@@ -74,10 +81,13 @@ def insert_ticks(rows):
             """
             INSERT INTO raw_ticks
                 (source, external_id, lat, lon, altitude_m, velocity_mps,
-                 heading_deg, observed_at)
+                 heading_deg, observed_at, icao24, aircraft_type,
+                 aircraft_variant)
             VALUES (%(source)s, %(external_id)s, %(lat)s, %(lon)s,
                     %(altitude_m)s, %(velocity_mps)s, %(heading_deg)s,
-                    %(observed_at)s)
+                    %(observed_at)s, %(icao24)s, %(aircraft_type)s,
+                    %(aircraft_variant)s)
+            ON CONFLICT DO NOTHING
             """,
             [
                 {
@@ -85,6 +95,9 @@ def insert_ticks(rows):
                     "altitude_m": None,
                     "velocity_mps": None,
                     "heading_deg": None,
+                    "icao24": None,
+                    "aircraft_type": None,
+                    "aircraft_variant": None,
                     **row,
                 }
                 for row in rows
@@ -109,7 +122,8 @@ def ticks_since(source, since_id):
         cur.execute(
             """
             SELECT id, external_id, lat, lon, altitude_m, velocity_mps,
-                   heading_deg, observed_at
+                   heading_deg, observed_at, icao24, aircraft_type,
+                   aircraft_variant
             FROM raw_ticks
             WHERE source = %s AND id > %s
             ORDER BY id
@@ -117,16 +131,19 @@ def ticks_since(source, since_id):
             (source, since_id),
         )
         cols = ["id", "external_id", "lat", "lon", "altitude_m",
-                "velocity_mps", "heading_deg", "observed_at"]
+                "velocity_mps", "heading_deg", "observed_at", "icao24",
+                "aircraft_type", "aircraft_variant"]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
-def ticks_in_window(start, end, source=None):
+def ticks_in_window(start, end, source=None, aircraft_types=None):
     """All rows with observed_at in [start, end], ordered by observed_at.
-    Used by replay.py. Optionally filter to one source."""
+    Used by replay.py. Optionally filter to one source and/or a list of
+    aircraft_type keys (see aircraft_types.py)."""
     query = """
         SELECT id, source, external_id, lat, lon, altitude_m, velocity_mps,
-               heading_deg, observed_at
+               heading_deg, observed_at, icao24, aircraft_type,
+               aircraft_variant
         FROM raw_ticks
         WHERE observed_at BETWEEN %s AND %s
     """
@@ -134,12 +151,16 @@ def ticks_in_window(start, end, source=None):
     if source is not None:
         query += " AND source = %s"
         params.append(source)
+    if aircraft_types:
+        query += " AND aircraft_type = ANY(%s)"
+        params.append(list(aircraft_types))
     query += " ORDER BY observed_at"
 
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(query, params)
         cols = ["id", "source", "external_id", "lat", "lon", "altitude_m",
-                "velocity_mps", "heading_deg", "observed_at"]
+                "velocity_mps", "heading_deg", "observed_at", "icao24",
+                "aircraft_type", "aircraft_variant"]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 

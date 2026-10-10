@@ -24,6 +24,7 @@ both streams -- see docs/FUSION.md "Conflict resolution".
 """
 
 import argparse
+import math
 import time
 from datetime import datetime, timezone
 
@@ -31,6 +32,28 @@ import db
 import geo
 from associate import associate
 from track import Track
+
+
+# Initial velocity variance when a track's starting velocity comes from the
+# tick's reported speed/heading: ~(20 m/s)^2, vs. the (50 m/s)^2 default
+# for an unknown starting velocity.
+REPORTED_VEL_VAR = 400.0
+
+
+def reported_velocity(row):
+    """(vx, vy) m/s east/north from a raw tick's speed + heading, or None."""
+    v, hdg = row.get("velocity_mps"), row.get("heading_deg")
+    if v is None or hdg is None:
+        return None
+    rad = math.radians(hdg)
+    return v * math.sin(rad), v * math.cos(rad)
+
+
+def new_track(tick, accel_std, external_id=None):
+    v0 = tick.get("v0")
+    return Track(tick["x"], tick["y"], tick["observed_at"], tick["source"],
+                 accel_std, tick["r_std"] ** 2, external_id=external_id, v0=v0,
+                 init_vel_var=REPORTED_VEL_VAR if v0 is not None else 2500.0)
 
 
 def load_new_ticks(source, cursor, r_std):
@@ -47,6 +70,9 @@ def load_new_ticks(source, cursor, r_std):
             "observed_at": row["observed_at"],
             "r_std": r_std,
             "source": source,
+            "aircraft_type": row["aircraft_type"],
+            "aircraft_variant": row["aircraft_variant"],
+            "v0": reported_velocity(row),
         })
         new_cursor = max(new_cursor, row["id"])
     return ticks, new_cursor
@@ -59,6 +85,7 @@ def _record_update(events, touched, track, tick, created_new_track):
         "raw_tick_id": tick["raw_id"],
         "observed_at": tick["observed_at"],
         "residual_m": track.last_residual_m,
+        "innovation_std_m": track.last_innovation_std_m,
         "created_new_track": created_new_track,
     })
     touched.add(track.id)
@@ -71,10 +98,11 @@ def apply_identified(ticks, tracks, callsign_to_track, accel_std, events, touche
         track = tracks.get(tid)
         if track is not None:
             track.apply(tick["x"], tick["y"], tick["observed_at"], "adsb", tick["r_std"])
+            track.note_type(tick.get("aircraft_type"), tick.get("aircraft_variant"))
             _record_update(events, touched, track, tick, created_new_track=False)
         else:
-            track = Track(tick["x"], tick["y"], tick["observed_at"], "adsb",
-                           accel_std, tick["r_std"] ** 2, external_id=tick["external_id"])
+            track = new_track(tick, accel_std, external_id=tick["external_id"])
+            track.note_type(tick.get("aircraft_type"), tick.get("aircraft_variant"))
             tracks[track.id] = track
             callsign_to_track[tick["external_id"]] = track.id
             _record_update(events, touched, track, tick, created_new_track=True)
@@ -85,7 +113,6 @@ def apply_anonymous(ticks, tracks, accel_std, gate_dist_m, gate_staleness_s,
     """Radar contacts and blank-callsign ADS-B ticks: no identity, so gate
     + Hungarian-assign the whole batch against the current track set."""
     matches = associate(ticks, tracks, gate_dist_m, gate_staleness_s)
-        "innovation_std_m": track.last_innovation_std_m,
     for tick, tid in zip(ticks, matches):
         track = tracks.get(tid)
         if track is not None:
@@ -93,8 +120,7 @@ def apply_anonymous(ticks, tracks, accel_std, gate_dist_m, gate_staleness_s,
                         tick["source"], tick["r_std"])
             _record_update(events, touched, track, tick, created_new_track=False)
         else:
-            track = Track(tick["x"], tick["y"], tick["observed_at"],
-                          tick["source"], accel_std, tick["r_std"] ** 2)
+            track = new_track(tick, accel_std)
             tracks[track.id] = track
             _record_update(events, touched, track, tick, created_new_track=True)
 
@@ -132,6 +158,8 @@ def persist(tracks, touched_ids, now):
             "last_radar_at": track.last_radar_at,
             "created_at": track.created_at,
             "updated_at": now,
+            "aircraft_type": track.aircraft_type,
+            "aircraft_variant": track.aircraft_variant,
         })
 
 
@@ -139,8 +167,18 @@ def run(poll_seconds, gate_dist_m, gate_staleness_s, track_ttl_s,
         r_adsb_std_m, r_radar_std_m, accel_std, since_id_adsb, since_id_radar):
     cursor_adsb = since_id_adsb if since_id_adsb is not None else db.latest_raw_id("adsb")
     cursor_radar = since_id_radar if since_id_radar is not None else db.latest_raw_id("radar")
+    center = db.recent_center()
+    if center:
+        geo.set_reference(*center)
+        print(f"flat-earth reference: {center[0]:.3f}, {center[1]:.3f} "
+              f"(center of recent adsb data)")
     tracks = {}
     callsign_to_track = {}
+    Track._next_id = db.next_track_id()
+    stale = db.clear_fused_tracks()
+    if stale:
+        print(f"cleared {stale} stale tracks left by a previous run "
+              f"(history kept in fused_track_events)")
 
     print(
         f"Fusing adsb ticks after id={cursor_adsb}, radar ticks after "
@@ -179,8 +217,12 @@ def run(poll_seconds, gate_dist_m, gate_staleness_s, track_ttl_s,
                 persist(tracks, touched, now)
 
             if adsb_ticks or radar_ticks or stale_ids:
+                # Ticks come back from Postgres in the session's local zone,
+                # the idle-cycle fallback is UTC -- print both as UTC, same
+                # as the poller.
                 print(
-                    f"[{now.strftime('%H:%M:%S')}] +{len(adsb_ticks)} adsb "
+                    f"[{now.astimezone(timezone.utc).strftime('%H:%M:%S')}] "
+                    f"+{len(adsb_ticks)} adsb "
                     f"+{len(radar_ticks)} radar -> {len(touched)} tracks touched, "
                     f"{len(stale_ids)} retired, {len(tracks)} active"
                 )

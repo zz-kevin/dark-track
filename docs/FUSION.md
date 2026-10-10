@@ -20,7 +20,13 @@ separate alpha/beta constants per source, which is really just a Kalman
 filter with the covariance bookkeeping thrown away.
 
 Only position is measured (`H` selects `x, y`); velocity/heading carried
-on raw ticks is not fed into the filter, so both sources share the same
+on raw ticks is not fed into the filter as a measurement -- but it does
+seed a *new* track's initial velocity (with a tighter initial velocity
+variance), so a just-created track predicts forward instead of standing
+still until its second position fix (98.4% -> 99.2% radar association on
+Gulf data). The flat-earth reference point (`geo.py`) is set at engine
+startup to the center of recent ADS-B data rather than fixed at NYC.
+Otherwise, so both sources share the same
 measurement model. Process noise is a discretized white-noise-acceleration
 model (`accel_std`, default 3 m/s²) — large enough to follow real turns
 and speed changes, tuned by eye rather than against a labeled maneuver

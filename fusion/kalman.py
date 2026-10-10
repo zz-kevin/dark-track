@@ -45,8 +45,14 @@ def process_noise(dt, accel_std):
 
 
 class KalmanFilter:
-    def __init__(self, x0, y0, accel_std, init_pos_var, init_vel_var=2500.0):
-        self.x = np.array([x0, y0, 0.0, 0.0])
+    def __init__(self, x0, y0, accel_std, init_pos_var, init_vel_var=2500.0,
+                 v0=None):
+        # v0 = (vx, vy) m/s from the tick's own reported speed/heading. Without
+        # it a new track predicts the aircraft standing still, and the next
+        # radar contact (a few seconds later, up to ~1km further on at cruise
+        # speed) falls outside the association gate.
+        vx0, vy0 = v0 if v0 is not None else (0.0, 0.0)
+        self.x = np.array([x0, y0, vx0, vy0])
         self.P = np.diag([init_pos_var, init_pos_var, init_vel_var, init_vel_var])
         self.accel_std = accel_std
 
@@ -71,12 +77,6 @@ class KalmanFilter:
         K = self.P @ H.T @ np.linalg.inv(S)
         self.x = self.x + K @ y
         self.P = (np.eye(STATE_DIM) - K @ H) @ self.P
-        return y  # innovation, for residual/QC tracking
-
-    @property
-    def position(self):
-        return float(self.x[0]), float(self.x[1])
-
         # S is the innovation covariance -- the actual, dt-aware spread the
         # innovation y should have under the process+measurement model
         # (grows with elapsed dt via process_noise, unlike a fixed r_std).
@@ -85,6 +85,12 @@ class KalmanFilter:
         # residuals -- anomaly/detectors.py's kinematic_inconsistency --
         # compare against the filter's real uncertainty, not just R.
         self.last_innovation_std_m = float(math.sqrt(S[0, 0] + S[1, 1]))
+        return y  # innovation, for residual/QC tracking
+
+    @property
+    def position(self):
+        return float(self.x[0]), float(self.x[1])
+
     @property
     def velocity(self):
         return float(self.x[2]), float(self.x[3])

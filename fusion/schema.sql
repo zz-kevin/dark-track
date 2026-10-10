@@ -39,3 +39,9 @@ CREATE TABLE IF NOT EXISTS fused_track_events (
 
 CREATE INDEX IF NOT EXISTS fused_track_events_track_idx
     ON fused_track_events (track_id, observed_at);
+
+-- Watched aircraft type (ingestion/aircraft_types.py), inherited from the
+-- track's identified ADS-B ticks. Kept after ADS-B goes quiet, so a
+-- radar-only track still says what it was last identified as.
+ALTER TABLE fused_tracks ADD COLUMN IF NOT EXISTS aircraft_type TEXT;
+ALTER TABLE fused_tracks ADD COLUMN IF NOT EXISTS aircraft_variant TEXT;

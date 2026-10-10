@@ -46,6 +46,8 @@ createdb dark_track                     # local Postgres, no auth
 python3 ingestion/db.py                  # creates the raw_ticks table
 
 python3 ingestion/opensky_poll.py        # real ADS-B feed -> raw_ticks
+# optional: watch military types over the Gulf (see ingestion/README.md)
+python3 ingestion/opensky_poll.py --region gulf --aircraft-db data/raw/aircraft-database.csv
 python3 ingestion/radar_sim.py           # synthetic radar feed, derived from the above
 
 python3 fusion/db.py                     # creates fused_tracks / fused_track_events

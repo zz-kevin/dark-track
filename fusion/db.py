@@ -40,6 +40,49 @@ def init_schema():
         cur.execute(SCHEMA_PATH.read_text())
 
 
+def recent_center(source="adsb", n=500):
+    """Mean lat/lon of the latest n ticks, or None if there are none --
+    used as geo.py's flat-earth reference point."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT AVG(lat), AVG(lon) FROM (
+                SELECT lat, lon FROM raw_ticks WHERE source = %s
+                ORDER BY id DESC LIMIT %s
+            ) recent
+            """,
+            (source, n),
+        )
+        lat, lon = cur.fetchone()
+        return None if lat is None else (lat, lon)
+
+
+def next_track_id():
+    """One past the highest track_id ever used (in either table), so a
+    restarted engine never reuses an id that fused_track_events already
+    attributes to a different aircraft from an earlier run."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT GREATEST(
+                (SELECT COALESCE(MAX(track_id), 0) FROM fused_tracks),
+                (SELECT COALESCE(MAX(track_id), 0) FROM fused_track_events)
+            ) + 1
+            """
+        )
+        return cur.fetchone()[0]
+
+
+def clear_fused_tracks():
+    """Drop the previous run's "current picture". Its tracks lived only in
+    that process's memory, so nothing will ever update or retire them --
+    left in place they'd sit in fused_tracks forever. fused_track_events
+    (the history) is kept."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM fused_tracks")
+        return cur.rowcount
+
+
 def latest_raw_id(source):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
@@ -53,14 +96,17 @@ def raw_ticks_since(source, since_id):
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            SELECT id, external_id, lat, lon, observed_at
+            SELECT id, external_id, lat, lon, observed_at, aircraft_type,
+                   aircraft_variant, velocity_mps, heading_deg
             FROM raw_ticks
             WHERE source = %s AND id > %s
             ORDER BY id
             """,
             (source, since_id),
         )
-        cols = ["id", "external_id", "lat", "lon", "observed_at"]
+        cols = ["id", "external_id", "lat", "lon", "observed_at",
+                "aircraft_type", "aircraft_variant", "velocity_mps",
+                "heading_deg"]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
@@ -71,12 +117,14 @@ def upsert_fused_track(track):
             INSERT INTO fused_tracks
                 (track_id, external_id, lat, lon, speed_mps, heading_deg,
                  confidence, adsb_hits, radar_hits, last_adsb_at,
-                 last_radar_at, created_at, updated_at)
+                 last_radar_at, created_at, updated_at, aircraft_type,
+                 aircraft_variant)
             VALUES
                 (%(track_id)s, %(external_id)s, %(lat)s, %(lon)s,
                  %(speed_mps)s, %(heading_deg)s, %(confidence)s,
                  %(adsb_hits)s, %(radar_hits)s, %(last_adsb_at)s,
-                 %(last_radar_at)s, %(created_at)s, %(updated_at)s)
+                 %(last_radar_at)s, %(created_at)s, %(updated_at)s,
+                 %(aircraft_type)s, %(aircraft_variant)s)
             ON CONFLICT (track_id) DO UPDATE SET
                 external_id = EXCLUDED.external_id,
                 lat = EXCLUDED.lat,
@@ -88,7 +136,9 @@ def upsert_fused_track(track):
                 radar_hits = EXCLUDED.radar_hits,
                 last_adsb_at = EXCLUDED.last_adsb_at,
                 last_radar_at = EXCLUDED.last_radar_at,
-                updated_at = EXCLUDED.updated_at
+                updated_at = EXCLUDED.updated_at,
+                aircraft_type = EXCLUDED.aircraft_type,
+                aircraft_variant = EXCLUDED.aircraft_variant
             """,
             track,
         )

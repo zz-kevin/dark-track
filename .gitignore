@@ -30,3 +30,10 @@ dist/
 .vscode/
 .idea/
 *.swp
+
+# --- Secrets ---
+opensky-credentials.json
+credentials.json
+
+# --- Pipeline logs (run.sh) ---
+/logs/

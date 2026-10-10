@@ -45,11 +45,28 @@ def jitter_position(lat, lon, noise_std_m, rng):
     return lat + dlat, lon + dlon
 
 
+def advance(lat, lon, velocity, heading, seconds):
+    """Dead-reckon a position forward along the reported track."""
+    if velocity is None or heading is None:
+        return lat, lon
+    dist = velocity * seconds
+    dn = dist * math.cos(math.radians(heading))
+    de = dist * math.sin(math.radians(heading))
+    dlat = dn / METERS_PER_DEG_LAT
+    dlon = de / (METERS_PER_DEG_LAT * math.cos(math.radians(lat)) or 1e-9)
+    return lat + dlat, lon + dlon
+
+
 def make_radar_row(adsb_row, noise_std_m, latency_min, latency_max, rng):
-    lat, lon = jitter_position(adsb_row["lat"], adsb_row["lon"], noise_std_m, rng)
     latency = rng.uniform(latency_min, latency_max)
     velocity = adsb_row["velocity_mps"]
     heading = adsb_row["heading_deg"]
+    # observed_at is shifted forward by `latency`, so the position has to be
+    # where the aircraft is at that shifted time -- not where it was at the
+    # ADS-B fix. Otherwise a 230 m/s airliner's contact lands ~1km behind
+    # its own track and misses fusion's 800m gate.
+    lat, lon = advance(adsb_row["lat"], adsb_row["lon"], velocity, heading, latency)
+    lat, lon = jitter_position(lat, lon, noise_std_m, rng)
     return {
         "source": "radar",
         "external_id": None,  # no ID -- the whole point of this source

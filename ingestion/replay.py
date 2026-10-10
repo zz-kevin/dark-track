@@ -9,6 +9,7 @@ interleaved by observed_at, same as they'd arrive live.
 
     python3 replay.py 2026-09-05T14:00:00 2026-09-05T14:10:00
     python3 replay.py 2026-09-05T14:00:00 2026-09-05T14:10:00 --fast
+    python3 replay.py 2026-09-05T14:00:00 2026-09-05T14:10:00 --type F35 --type B2
 
 Downstream consumers (fusion/) that want the raw feed rather than a
 printed transcript should call db.ticks_in_window() directly instead of
@@ -20,6 +21,7 @@ import time
 from datetime import datetime, timezone
 
 import db
+from aircraft_types import BY_KEY, label
 
 
 def parse_ts(s):
@@ -27,8 +29,9 @@ def parse_ts(s):
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
-def run(start, end, fast, source):
-    rows = db.ticks_in_window(start, end, source=source)
+def run(start, end, fast, source, aircraft_types):
+    rows = db.ticks_in_window(start, end, source=source,
+                              aircraft_types=aircraft_types)
     if not rows:
         print("no ticks in that window")
         return
@@ -45,11 +48,13 @@ def run(start, end, fast, source):
         prev_observed_at = row["observed_at"]
 
         ts = row["observed_at"].strftime("%H:%M:%S")
-        label = row["external_id"] or f"radar#{row['id']}"
+        name = row["external_id"] or f"radar#{row['id']}"
+        type_label = label(row["aircraft_type"], row["aircraft_variant"])
         print(
-            f"[{ts}] {row['source']:<5} {label:<10} "
+            f"[{ts}] {row['source']:<5} {name:<10} "
             f"lat={row['lat']:.4f} lon={row['lon']:.4f} "
             f"alt={row['altitude_m']} vel={row['velocity_mps']}"
+            + (f"  <- {type_label}" if type_label else "")
         )
 
 
@@ -61,9 +66,14 @@ def parse_args():
                     help="print immediately instead of sleeping between ticks")
     p.add_argument("--source", choices=["adsb", "radar"], default=None,
                     help="restrict to one source (default: both, interleaved)")
+    p.add_argument("--type", dest="aircraft_types", action="append",
+                    choices=sorted(BY_KEY) + ["US_MIL"], default=None,
+                    help="only replay ticks of this watched aircraft type "
+                         "(repeatable). Radar ticks carry no type, so this "
+                         "implies adsb-only output")
     return p.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    run(args.start, args.end, args.fast, args.source)
+    run(args.start, args.end, args.fast, args.source, args.aircraft_types)

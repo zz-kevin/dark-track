@@ -42,6 +42,10 @@ def run(poll_seconds, adsb_silence_s, radar_recency_s,
         f"{poll_seconds}s. Ctrl+C to stop.\n"
     )
 
+    # Quiet unless something fires -- so a heartbeat line every
+    # HEARTBEAT_S shows it's alive when you're watching its output.
+    last_heartbeat = 0.0
+
     while True:
         try:
             tracks = db.fetch_tracks()
@@ -80,6 +84,13 @@ def run(poll_seconds, adsb_silence_s, radar_recency_s,
                     f"[{now.strftime('%H:%M:%S')}] went_dark: {len(dark_hits)} open, "
                     f"kinematic: +{len(kinem_detected)} new -{len(kinem_resolved)} resolved"
                 )
+            elif time.time() - last_heartbeat >= HEARTBEAT_S:
+                print(
+                    f"[{now.astimezone(timezone.utc).strftime('%H:%M:%S')}] "
+                    f"watching {len(tracks)} tracks -- no new anomalies"
+                    + (f", {len(open_went_dark)} went-dark still open" if open_went_dark else "")
+                )
+                last_heartbeat = time.time()
         except Exception as e:
             print(f"anomaly tick failed: {e}")
             raise
@@ -89,6 +100,9 @@ def run(poll_seconds, adsb_silence_s, radar_recency_s,
         except KeyboardInterrupt:
             print("\nstopped.")
             break
+
+
+HEARTBEAT_S = 60
 
 
 def parse_args():

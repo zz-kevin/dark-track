@@ -17,12 +17,17 @@ class Track:
     _next_id = 1
 
     def __init__(self, x0, y0, observed_at, source, accel_std, init_pos_var,
-                 external_id=None):
+                 external_id=None, v0=None, init_vel_var=2500.0):
         self.id = Track._next_id
         Track._next_id += 1
 
-        self.kf = KalmanFilter(x0, y0, accel_std, init_pos_var)
+        self.kf = KalmanFilter(x0, y0, accel_std, init_pos_var,
+                               init_vel_var=init_vel_var, v0=v0)
         self.external_id = external_id
+        # Watched military type (ingestion/aircraft_types.py), only ever
+        # learned from identified ADS-B ticks -- see note_type().
+        self.aircraft_type = None
+        self.aircraft_variant = None
         self.created_at = observed_at
         self.last_update = observed_at
         self.last_adsb_at = observed_at if source == "adsb" else None
@@ -30,11 +35,6 @@ class Track:
         self.adsb_hits = 1 if source == "adsb" else 0
         self.radar_hits = 1 if source == "radar" else 0
         self.last_residual_m = 0.0
-
-    def apply(self, x, y, observed_at, source, r_std):
-        dt = (observed_at - self.last_update).total_seconds()
-        self.kf.predict(dt)
-        innovation = self.kf.update((x, y), r_std)
         # Placeholder for the "created, not yet updated" event this track's
         # constructor tick gets logged with (see apply_identified/
         # apply_anonymous in engine.py) -- no Kalman update() has run yet to
@@ -43,15 +43,31 @@ class Track:
         # 0.0, which would make kinematic_inconsistency()'s normalization
         # divide by zero.
         self.last_innovation_std_m = (2 * init_pos_var) ** 0.5
+
+    def apply(self, x, y, observed_at, source, r_std):
+        dt = (observed_at - self.last_update).total_seconds()
+        self.kf.predict(dt)
+        innovation = self.kf.update((x, y), r_std)
         self.last_residual_m = float(math.hypot(*innovation))
+        self.last_innovation_std_m = self.kf.last_innovation_std_m
         self.last_update = observed_at
         if source == "adsb":
             self.last_adsb_at = observed_at
             self.adsb_hits += 1
         else:
-        self.last_innovation_std_m = self.kf.last_innovation_std_m
             self.last_radar_at = observed_at
             self.radar_hits += 1
+
+    def note_type(self, aircraft_type, aircraft_variant):
+        """Record type from an ADS-B tick. A later tick with no type never
+        clears it, and a specific type/variant beats the generic US_MIL
+        hex-block flag."""
+        if aircraft_type is None:
+            return
+        if aircraft_type == "US_MIL" and self.aircraft_type not in (None, "US_MIL"):
+            return
+        self.aircraft_type = aircraft_type
+        self.aircraft_variant = aircraft_variant or self.aircraft_variant
 
     def predicted_position(self, at_time):
         dt = (at_time - self.last_update).total_seconds()
