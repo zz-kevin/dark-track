@@ -3,9 +3,12 @@
 -- fused_tracks holds one row per currently-live fused track (upserted on
 -- every update) -- this is what api/ will read for the "current picture".
 -- fused_track_events is an append-only log of every tick that updated a
--- track, including the Kalman innovation (residual) -- this is what
--- anomaly/ will consume for kinematic-inconsistency checks, and what lets
--- a fusion run be debugged/replayed after the fact.
+-- track, including the Kalman innovation (residual_m) and the filter's own
+-- innovation covariance at that update (innovation_std_m, dt-aware, grows
+-- with time since last update) -- this is what anomaly/ consumes for
+-- kinematic-inconsistency checks (normalizing the former by the latter,
+-- not by a fixed per-source R), and what lets a fusion run be
+-- debugged/replayed after the fact.
 
 CREATE TABLE IF NOT EXISTS fused_tracks (
     track_id     BIGINT PRIMARY KEY,
@@ -30,6 +33,7 @@ CREATE TABLE IF NOT EXISTS fused_track_events (
     raw_tick_id   BIGINT NOT NULL,
     observed_at   TIMESTAMPTZ NOT NULL,
     residual_m    DOUBLE PRECISION NOT NULL,
+    innovation_std_m DOUBLE PRECISION NOT NULL,
     created_new_track BOOLEAN NOT NULL DEFAULT FALSE
 );
 

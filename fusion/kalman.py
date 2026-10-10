@@ -11,6 +11,8 @@ trust an ADS-B position far more than a radar-derived one, which is the
 actual point of fusing two sources.
 """
 
+import math
+
 import numpy as np
 
 STATE_DIM = 4
@@ -75,6 +77,14 @@ class KalmanFilter:
     def position(self):
         return float(self.x[0]), float(self.x[1])
 
+        # S is the innovation covariance -- the actual, dt-aware spread the
+        # innovation y should have under the process+measurement model
+        # (grows with elapsed dt via process_noise, unlike a fixed r_std).
+        # Stored as a scalar std dev (trace of the position block, same
+        # convention as position_variance below) so callers normalizing
+        # residuals -- anomaly/detectors.py's kinematic_inconsistency --
+        # compare against the filter's real uncertainty, not just R.
+        self.last_innovation_std_m = float(math.sqrt(S[0, 0] + S[1, 1]))
     @property
     def velocity(self):
         return float(self.x[2]), float(self.x[3])

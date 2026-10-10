@@ -35,12 +35,21 @@ class Track:
         dt = (observed_at - self.last_update).total_seconds()
         self.kf.predict(dt)
         innovation = self.kf.update((x, y), r_std)
+        # Placeholder for the "created, not yet updated" event this track's
+        # constructor tick gets logged with (see apply_identified/
+        # apply_anonymous in engine.py) -- no Kalman update() has run yet to
+        # produce a real S, so this uses the initial P's position block the
+        # same way S normally would (P[0,0]+P[1,1], then sqrt), rather than
+        # 0.0, which would make kinematic_inconsistency()'s normalization
+        # divide by zero.
+        self.last_innovation_std_m = (2 * init_pos_var) ** 0.5
         self.last_residual_m = float(math.hypot(*innovation))
         self.last_update = observed_at
         if source == "adsb":
             self.last_adsb_at = observed_at
             self.adsb_hits += 1
         else:
+        self.last_innovation_std_m = self.kf.last_innovation_std_m
             self.last_radar_at = observed_at
             self.radar_hits += 1
 

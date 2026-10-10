@@ -107,9 +107,10 @@ def insert_fused_events(events):
             """
             INSERT INTO fused_track_events
                 (track_id, source, raw_tick_id, observed_at, residual_m,
-                 created_new_track)
+                 innovation_std_m, created_new_track)
             VALUES (%(track_id)s, %(source)s, %(raw_tick_id)s,
-                    %(observed_at)s, %(residual_m)s, %(created_new_track)s)
+                    %(observed_at)s, %(residual_m)s, %(innovation_std_m)s,
+                    %(created_new_track)s)
             """,
             events,
         )

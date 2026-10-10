@@ -85,6 +85,7 @@ def apply_anonymous(ticks, tracks, accel_std, gate_dist_m, gate_staleness_s,
     """Radar contacts and blank-callsign ADS-B ticks: no identity, so gate
     + Hungarian-assign the whole batch against the current track set."""
     matches = associate(ticks, tracks, gate_dist_m, gate_staleness_s)
+        "innovation_std_m": track.last_innovation_std_m,
     for tick, tid in zip(ticks, matches):
         track = tracks.get(tid)
         if track is not None:
