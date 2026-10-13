@@ -32,6 +32,10 @@ class Track:
         self.last_update = observed_at
         self.last_adsb_at = observed_at if source == "adsb" else None
         self.last_radar_at = observed_at if source == "radar" else None
+        # Altitude from the most recent identified ADS-B tick (None = OpenSky
+        # reported no barometric altitude, which it does for aircraft on the
+        # ground). anomaly/'s went-dark detector skips ground traffic.
+        self.last_adsb_alt_m = None
         self.adsb_hits = 1 if source == "adsb" else 0
         self.radar_hits = 1 if source == "radar" else 0
         self.last_residual_m = 0.0

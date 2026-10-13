@@ -10,11 +10,13 @@ advancing in simulated poll cycles just like the two live engines would --
 all in-memory, no live Postgres writes, no real-time sleeping. Scores
 against docs/PROBLEM.md's stated success criteria:
 
-  - Went-dark: flagged within 15s of the injected event.
-  - False-positive rate: any alert on a *non*-injected track, across the
-    whole sweep, counts against it.
+  - Went-dark: flagged within adsb_silence_s + one ADS-B update interval
+    of the injected event (~41s at 10s polling, ~115s at 45s).
+  - False-positive rate: share of aircraft that raise a false alarm on
+    the un-injected window (ordinary traffic), each alert counted once;
+    alerts the injection itself causes are reported separately.
   - (Kinematic inconsistency has no stated latency target in
-    docs/PROBLEM.md; scored the same way for comparability.)
+    docs/PROBLEM.md; budget is (consecutive + 1) update intervals.)
 
 Usage:
 
@@ -68,7 +70,9 @@ def _load_module(name, path):
 ingestion_db = _load_module("ingestion_db", INGESTION_DIR / "db.py")
 
 import inject  # noqa: E402
-from detectors import kinematic_inconsistency, went_dark, went_dark_thresholds  # noqa: E402
+from detectors import (  # noqa: E402
+    MIN_AIRBORNE_ALT_M, kinematic_inconsistency, went_dark, went_dark_thresholds,
+)
 
 DEFAULTS = dict(
     poll_seconds=3.0,
@@ -156,6 +160,7 @@ def run_scenario(ticks, params):
                 "r_std": r_std, "source": row["source"],
                 # Live fusion seeds new tracks with the reported velocity.
                 "v0": fusion_engine.reported_velocity(row),
+                "altitude_m": row["altitude_m"],
             }
             (adsb if row["source"] == "adsb" else radar).append(tick)
 
@@ -176,7 +181,8 @@ def run_scenario(ticks, params):
 
         snapshot = [
             {"track_id": t.id, "external_id": t.external_id, "adsb_hits": t.adsb_hits,
-             "last_adsb_at": t.last_adsb_at, "last_radar_at": t.last_radar_at}
+             "last_adsb_at": t.last_adsb_at, "last_radar_at": t.last_radar_at,
+             "last_adsb_alt_m": t.last_adsb_alt_m}
             for t in tracks.values()
         ]
         dark_hits = went_dark(
@@ -228,10 +234,56 @@ def eligible_external_ids(ticks, min_adsb_ticks=5):
     return [eid for eid, n in counts.items() if n >= min_adsb_ticks]
 
 
+KIND_NAME = {"went_dark": "went_dark", "kinematic": "kinematic_inconsistency"}
+
+
+def _alert_key(d):
+    return d["kind"], d.get("external_id"), d["detected_at"]
+
+
+def default_latency_budget(kind, params):
+    """docs/PROBLEM.md's target, in terms of the window's own cadence.
+    Went-dark can't fire before ADS-B has been silent adsb_silence_s, and
+    the radar contact that confirms it arrives up to one update interval
+    later. Kinematic needs `consecutive` over-threshold updates, plus one
+    interval of slack for where the cutoff falls between updates."""
+    interval = params["adsb_interval_s"]
+    if kind == "went_dark":
+        return params["adsb_silence_s"] + interval
+    return (params["consecutive"] + 1) * interval
+
+
+def _airborne_at(ticks, external_id, at):
+    before = [t for t in ticks if t["source"] == "adsb" and t["external_id"] == external_id
+              and t["observed_at"] <= at]
+    if not before:
+        return False
+    alt = max(before, key=lambda t: t["observed_at"])["altitude_m"]
+    return alt is not None and alt >= MIN_AIRBORNE_ALT_M
+
+
 def sweep(kind, ticks, params, latency_budget_s):
+    """Recall: one injected event per eligible aircraft, each its own run.
+
+    False alarms are scored in two parts, so the same alert isn't counted
+    once per run (the old n*(n-1) metric re-counted every real-traffic
+    alert in every one of n runs):
+      - background: alerts of this kind on the *un-injected* window, i.e.
+        what the detector does on ordinary traffic. The headline rate is
+        the share of aircraft with at least one -- docs/PROBLEM.md's
+        "false-positive rate under 5%".
+      - induced: alerts in an injected run that aren't the true positive
+        and weren't already in the background -- side effects of the
+        injection itself (e.g. the target's own radar contacts orphaned
+        into a new track), averaged per run.
+    Only alerts of the detector being swept count; a went-dark sweep
+    doesn't score kinematic alerts as its false positives."""
+    kind_name = KIND_NAME[kind]
     candidates = eligible_external_ids(ticks)
+    background = [d for d in run_scenario(ticks, params) if d["kind"] == kind_name]
+    background_keys = {_alert_key(d) for d in background}
     results = []
-    all_false_positives = []
+    induced = []
     skipped = []
 
     for eid in candidates:
@@ -243,29 +295,42 @@ def sweep(kind, ticks, params, latency_budget_s):
         except ValueError as e:
             skipped.append((eid, str(e)))
             continue
+        if kind == "went_dark" and not _airborne_at(ticks, eid, gt["injected_at"]):
+            # went_dark() deliberately ignores ground traffic, so a dropout
+            # injected while taxiing isn't a detectable event to score.
+            skipped.append((eid, "on the ground at the injected dropout"))
+            continue
 
-        detections = run_scenario(modified, params)
+        detections = [d for d in run_scenario(modified, params) if d["kind"] == kind_name]
         tp, fps = score(detections, gt, latency_budget_s)
         results.append({"external_id": eid, "true_positive": tp})
-        all_false_positives.extend(fps)
+        induced.extend(d for d in fps if _alert_key(d) not in background_keys)
 
     n = len(results)
     hits = [r for r in results if r["true_positive"]]
     recall = len(hits) / n if n else float("nan")
     latencies = [h["true_positive"]["latency_s"] for h in hits]
-    fp_opportunities = sum(max(0, len(candidates) - 1) for _ in results)
-    fpr = len(all_false_positives) / fp_opportunities if fp_opportunities else float("nan")
+    noisy_aircraft = {d["external_id"] for d in background if d.get("external_id")}
+    anon_alerts = sum(1 for d in background if not d.get("external_id"))
+    fpr = len(noisy_aircraft) / len(candidates) if candidates else float("nan")
+    times = [t["observed_at"] for t in ticks]
+    hours = (max(times) - min(times)).total_seconds() / 3600
 
-    print(f"kind={kind} window candidates={len(candidates)} scored={n} skipped={len(skipped)}")
+    print(f"kind={kind} window candidates={len(candidates)} scored={n} skipped={len(skipped)} "
+          f"latency budget={latency_budget_s:.0f}s")
     for eid, reason in skipped:
         print(f"  skipped {eid}: {reason}")
     print(f"recall: {len(hits)}/{n} = {recall:.1%}" if n else "recall: n/a (no eligible tracks)")
     if latencies:
         print(f"detection latency: mean={sum(latencies)/len(latencies):.1f}s max={max(latencies):.1f}s")
-    print(f"false positives: {len(all_false_positives)} / {fp_opportunities} opportunities "
-          f"= {fpr:.1%}" if fp_opportunities else "false positives: n/a")
-    return {"recall": recall, "latencies": latencies, "fpr": fpr,
-            "n": n, "false_positives": len(all_false_positives)}
+    print(f"false-positive rate: {len(noisy_aircraft)}/{len(candidates)} aircraft = {fpr:.1%} "
+          f"raised a false alarm on ordinary traffic ({len(background)} alerts, "
+          f"{anon_alerts} on unidentified tracks, "
+          f"{len(background) / (len(candidates) * hours) if hours else 0:.2f} per aircraft-hour)")
+    print(f"injection-induced false alarms: {len(induced)} over {n} runs "
+          f"= {len(induced) / n if n else 0:.2f} per run")
+    return {"recall": recall, "latencies": latencies, "fpr": fpr, "n": n,
+            "background_alerts": len(background), "induced": len(induced)}
 
 
 def parse_ts(s):
@@ -284,7 +349,9 @@ def parse_args():
         sp.add_argument("end", type=parse_ts)
         if mode == "one":
             sp.add_argument("--external-id", required=True)
-        sp.add_argument("--latency-budget-s", type=float, default=15.0)
+        sp.add_argument("--latency-budget-s", type=float, default=None,
+                        help="default: docs/PROBLEM.md's target scaled to the "
+                             "window's cadence (see default_latency_budget)")
     return p.parse_args()
 
 
@@ -309,7 +376,8 @@ def scaled_params(ticks):
     print(f"window adsb interval {interval:.0f}s -> gate {gate:.0f}s, ttl {ttl:.0f}s, "
           f"silence {silence:.0f}s, radar recency {recency:.0f}s")
     return {**DEFAULTS, "gate_staleness_s": gate, "track_ttl_s": ttl,
-            "adsb_silence_s": silence, "radar_recency_s": recency}
+            "adsb_silence_s": silence, "radar_recency_s": recency,
+            "adsb_interval_s": interval}
 
 
 def main():
@@ -319,17 +387,19 @@ def main():
         print("no ticks in that window")
         return
     params = scaled_params(ticks)
+    budget = (args.latency_budget_s if args.latency_budget_s is not None
+              else default_latency_budget(args.kind, params))
     kind = "went_dark" if args.kind == "went_dark" else "kinematic_inconsistency"
 
     if args.mode == "sweep":
-        sweep(args.kind, ticks, params, args.latency_budget_s)
+        sweep(args.kind, ticks, params, budget)
     else:
         if args.kind == "went_dark":
             modified, gt = inject.inject_went_dark(ticks, args.external_id)
         else:
             modified, gt = inject.inject_kinematic_jump(ticks, args.external_id)
         detections = run_scenario(modified, params)
-        tp, fps = score(detections, gt, args.latency_budget_s)
+        tp, fps = score(detections, gt, budget)
         print(f"ground truth: {gt}")
         print(f"true positive: {tp}")
         print(f"false positives ({len(fps)}): {fps}")

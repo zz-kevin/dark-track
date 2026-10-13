@@ -73,6 +73,7 @@ def load_new_ticks(source, cursor, r_std):
             "aircraft_type": row["aircraft_type"],
             "aircraft_variant": row["aircraft_variant"],
             "v0": reported_velocity(row),
+            "altitude_m": row["altitude_m"],
         })
         new_cursor = max(new_cursor, row["id"])
     return ticks, new_cursor
@@ -99,10 +100,12 @@ def apply_identified(ticks, tracks, callsign_to_track, accel_std, events, touche
         if track is not None:
             track.apply(tick["x"], tick["y"], tick["observed_at"], "adsb", tick["r_std"])
             track.note_type(tick.get("aircraft_type"), tick.get("aircraft_variant"))
+            track.last_adsb_alt_m = tick.get("altitude_m")
             _record_update(events, touched, track, tick, created_new_track=False)
         else:
             track = new_track(tick, accel_std, external_id=tick["external_id"])
             track.note_type(tick.get("aircraft_type"), tick.get("aircraft_variant"))
+            track.last_adsb_alt_m = tick.get("altitude_m")
             tracks[track.id] = track
             callsign_to_track[tick["external_id"]] = track.id
             _record_update(events, touched, track, tick, created_new_track=True)
@@ -160,6 +163,7 @@ def persist(tracks, touched_ids, now):
             "updated_at": now,
             "aircraft_type": track.aircraft_type,
             "aircraft_variant": track.aircraft_variant,
+            "last_adsb_alt_m": track.last_adsb_alt_m,
         })
 
 

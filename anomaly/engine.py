@@ -63,10 +63,11 @@ def run(poll_seconds, adsb_silence_s, radar_recency_s,
 
             dark_hits = went_dark(tracks, now, adsb_silence_s, radar_recency_s)
             currently_open = {h["track_id"] for h in dark_hits}
-            for h in dark_hits:
-                if h["track_id"] not in open_went_dark:
-                    db.insert_anomaly_event(**h)
-            for tid in open_went_dark - currently_open:
+            new_dark = [h for h in dark_hits if h["track_id"] not in open_went_dark]
+            for h in new_dark:
+                db.insert_anomaly_event(**h)
+            resolved_dark = open_went_dark - currently_open
+            for tid in resolved_dark:
                 db.resolve_episode(tid, "went_dark", now)
             open_went_dark = currently_open
 
@@ -85,10 +86,14 @@ def run(poll_seconds, adsb_silence_s, radar_recency_s,
             for r in kinem_resolved:
                 db.resolve_episode(r["track_id"], r["kind"], r["resolved_at"])
 
-            if dark_hits or kinem_detected or kinem_resolved:
+            # Only on change -- an open episode used to reprint every poll.
+            if new_dark or resolved_dark or kinem_detected or kinem_resolved:
                 print(
-                    f"[{now.strftime('%H:%M:%S')}] went_dark: {len(dark_hits)} open, "
-                    f"kinematic: +{len(kinem_detected)} new -{len(kinem_resolved)} resolved"
+                    f"[{now.astimezone(timezone.utc).strftime('%H:%M:%S')}] "
+                    f"went_dark: +{len(new_dark)} new -{len(resolved_dark)} resolved "
+                    f"({len(open_went_dark)} open"
+                    + (f": {', '.join(str(h['external_id']) for h in new_dark)}" if new_dark else "")
+                    + f"), kinematic: +{len(kinem_detected)} new -{len(kinem_resolved)} resolved"
                 )
             elif time.time() - last_heartbeat >= HEARTBEAT_S:
                 print(

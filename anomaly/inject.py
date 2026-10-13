@@ -67,15 +67,20 @@ def inject_went_dark(ticks, external_id, cutoff_fraction=0.5):
 
 
 def inject_kinematic_jump(ticks, external_id, cutoff_fraction=0.5,
-                           ramp_m_per_tick=400.0, seed=None):
-    """Simulates a sudden, sustained maneuver the constant-velocity model
-    can't explain: after a cutoff timestamp, each of `external_id`'s ADS-B
-    ticks gets pushed further sideways (perpendicular to its original
-    track, a hard turn) than the last, by ramp_m_per_tick more each time --
-    a sustained maneuver rather than one clean position jump, so the
-    resulting residual streak is sustained across consecutive updates
-    (what kinematic_inconsistency()'s `consecutive` check requires) rather
-    than a single one-tick outlier that would just look like sensor noise.
+                           lateral_accel_mps2=20.0, seed=None):
+    """Simulates a sustained maneuver the constant-velocity model can't
+    explain: after a cutoff timestamp, `external_id`'s ADS-B positions are
+    displaced by 0.5 * a * t^2 along a random bearing -- a constant
+    lateral acceleration of lateral_accel_mps2 (default ~2g, far outside
+    what an airliner does and ~7x fusion's accel_std process noise).
+
+    Displacement grows with *time*, not tick count, so the same maneuver
+    is injected at any poll cadence. (The previous model added a fixed
+    400m per tick: a constant sideways *velocity*, which the
+    constant-velocity filter simply learned as a new velocity after a
+    couple of updates -- measured: zero alerts on the target.) Sustained
+    rather than a one-tick jump, so the residual streak spans the
+    consecutive updates kinematic_inconsistency() requires.
 
     Returns (modified_ticks, ground_truth) where ground_truth is
     {"external_id", "kind": "kinematic_inconsistency", "injected_at"}.
@@ -103,13 +108,13 @@ def inject_kinematic_jump(ticks, external_id, cutoff_fraction=0.5,
 
     bearing = rng.uniform(0, 2 * math.pi)
     north_dir, east_dir = math.cos(bearing), math.sin(bearing)
-    rank_by_id = {t["id"]: i + 1 for i, t in enumerate(after)}  # 1-indexed
+    after_ids = {t["id"] for t in after}
 
     modified = []
     for t in ticks:
-        rank = rank_by_id.get(t["id"])
-        if rank is not None:
-            offset_m = ramp_m_per_tick * rank
+        if t["id"] in after_ids:
+            elapsed = (t["observed_at"] - cutoff_at).total_seconds()
+            offset_m = 0.5 * lateral_accel_mps2 * elapsed ** 2
             new_lat, new_lon = _offset_latlon(
                 t["lat"], t["lon"], north_dir * offset_m, east_dir * offset_m
             )

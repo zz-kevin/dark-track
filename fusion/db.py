@@ -97,7 +97,7 @@ def raw_ticks_since(source, since_id):
         cur.execute(
             """
             SELECT id, external_id, lat, lon, observed_at, aircraft_type,
-                   aircraft_variant, velocity_mps, heading_deg
+                   aircraft_variant, velocity_mps, heading_deg, altitude_m
             FROM raw_ticks
             WHERE source = %s AND id > %s
             ORDER BY id
@@ -106,7 +106,7 @@ def raw_ticks_since(source, since_id):
         )
         cols = ["id", "external_id", "lat", "lon", "observed_at",
                 "aircraft_type", "aircraft_variant", "velocity_mps",
-                "heading_deg"]
+                "heading_deg", "altitude_m"]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
@@ -118,13 +118,13 @@ def upsert_fused_track(track):
                 (track_id, external_id, lat, lon, speed_mps, heading_deg,
                  confidence, adsb_hits, radar_hits, last_adsb_at,
                  last_radar_at, created_at, updated_at, aircraft_type,
-                 aircraft_variant)
+                 aircraft_variant, last_adsb_alt_m)
             VALUES
                 (%(track_id)s, %(external_id)s, %(lat)s, %(lon)s,
                  %(speed_mps)s, %(heading_deg)s, %(confidence)s,
                  %(adsb_hits)s, %(radar_hits)s, %(last_adsb_at)s,
                  %(last_radar_at)s, %(created_at)s, %(updated_at)s,
-                 %(aircraft_type)s, %(aircraft_variant)s)
+                 %(aircraft_type)s, %(aircraft_variant)s, %(last_adsb_alt_m)s)
             ON CONFLICT (track_id) DO UPDATE SET
                 external_id = EXCLUDED.external_id,
                 lat = EXCLUDED.lat,
@@ -138,7 +138,8 @@ def upsert_fused_track(track):
                 last_radar_at = EXCLUDED.last_radar_at,
                 updated_at = EXCLUDED.updated_at,
                 aircraft_type = EXCLUDED.aircraft_type,
-                aircraft_variant = EXCLUDED.aircraft_variant
+                aircraft_variant = EXCLUDED.aircraft_variant,
+                last_adsb_alt_m = EXCLUDED.last_adsb_alt_m
             """,
             track,
         )

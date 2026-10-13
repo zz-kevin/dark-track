@@ -30,9 +30,17 @@ targets, not final numbers.)_
 - **Fusion accuracy:** correctly associate the same real-world aircraft
   across both sources within `300` meters and `5` seconds, for `90`% of
   tracks in a test window.
-- **Anomaly detection:** flag an injected "went dark" event within `15`
-  seconds of it occurring, with a false-positive rate under `5`% on a
-  held-out replay set.
+- **Anomaly detection:** flag an injected "went dark" event within the
+  ADS-B silence threshold plus one update interval of it occurring
+  (~`41` s at 10s polling), with under `5`% of aircraft raising a false
+  alarm on a held-out replay set.
+
+  _Revised from "within 15 seconds":_ the went-dark detector can't fire
+  until ADS-B has been silent `adsb_silence_s`, which had to be raised
+  from 10s to 30s because real OpenSky poll jitter produced constant
+  false alarms at 10s. A 15s target with a 30s silence threshold is
+  unreachable by construction (measured: 6% recall). The target now
+  scales with the feed's cadence instead of assuming one.
 - **Throughput:** sustain fusion + anomaly detection for at least `150`
   concurrent tracks with end-to-end (sensor tick → fused output) latency
   under `500` ms.

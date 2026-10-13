@@ -45,3 +45,8 @@ CREATE INDEX IF NOT EXISTS fused_track_events_track_idx
 -- radar-only track still says what it was last identified as.
 ALTER TABLE fused_tracks ADD COLUMN IF NOT EXISTS aircraft_type TEXT;
 ALTER TABLE fused_tracks ADD COLUMN IF NOT EXISTS aircraft_variant TEXT;
+
+-- Altitude of the track's latest identified ADS-B tick; NULL when OpenSky
+-- reports none (aircraft on the ground). anomaly/'s went-dark detector
+-- ignores ground traffic -- see detectors.went_dark.
+ALTER TABLE fused_tracks ADD COLUMN IF NOT EXISTS last_adsb_alt_m DOUBLE PRECISION;

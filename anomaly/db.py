@@ -45,12 +45,12 @@ def fetch_tracks():
         cur.execute(
             """
             SELECT track_id, external_id, adsb_hits, radar_hits,
-                   last_adsb_at, last_radar_at, updated_at
+                   last_adsb_at, last_radar_at, updated_at, last_adsb_alt_m
             FROM fused_tracks
             """
         )
         cols = ["track_id", "external_id", "adsb_hits", "radar_hits",
-                "last_adsb_at", "last_radar_at", "updated_at"]
+                "last_adsb_at", "last_radar_at", "updated_at", "last_adsb_alt_m"]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 

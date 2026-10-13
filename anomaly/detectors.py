@@ -38,6 +38,15 @@ def went_dark(tracks, now, adsb_silence_s=30.0, radar_recency_s=10.0):
     for t in tracks:
         if not t.get("adsb_hits") or t["last_adsb_at"] is None or t["last_radar_at"] is None:
             continue
+        # Ground traffic: OpenSky reports no barometric altitude on the
+        # ground, airport ADS-B coverage is patchy, and dozens of taxiing
+        # aircraft sit within the association gate of each other -- so a
+        # neighbour's radar keeps a silent track "corroborated". Measured on
+        # 30 min of NYC: all 27 false went-dark alerts were ground traffic.
+        # Going dark only means something airborne.
+        alt = t.get("last_adsb_alt_m", MIN_AIRBORNE_ALT_M)
+        if alt is None or alt < MIN_AIRBORNE_ALT_M:
+            continue
         adsb_gap = (now - t["last_adsb_at"]).total_seconds()
         radar_gap = (now - t["last_radar_at"]).total_seconds()
         if adsb_gap > adsb_silence_s and radar_gap <= radar_recency_s:
@@ -50,6 +59,11 @@ def went_dark(tracks, now, adsb_silence_s=30.0, radar_recency_s=10.0):
                 "source": "radar",
             })
     return out
+
+
+# Below this (or no altitude at all) a track's last ADS-B fix counts as
+# on the ground / on final, and went_dark() ignores it.
+MIN_AIRBORNE_ALT_M = 100.0
 
 
 def went_dark_thresholds(interval_s):
