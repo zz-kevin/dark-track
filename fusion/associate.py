@@ -35,6 +35,7 @@ common in busy airspace.
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
+from scipy.special import logsumexp
 
 UNGATED_COST = 1e9
 # "likelihood" or "euclidean" -- see associate()'s cost comment.
@@ -52,20 +53,33 @@ def associate(ticks, tracks, max_dist_m, max_staleness_s):
     if not track_ids or not ticks:
         return [None] * len(ticks)
 
-    # Every track's state, covariance and clock as arrays, so each tick is
-    # gated against all tracks at once. Same arithmetic as
-    # KalmanFilter.peek_predict, position block only: the per-pair version
-    # was the slowest step of a fusion cycle (measured p95 360 ms on a
+    # Each track is predicted once, with its own motion model, to a base
+    # time -- the batch's earliest tick, or its own last update if later --
+    # and every tick is then gated against all tracks at once as arrays,
+    # extrapolating the last (sub-second, within an association slice)
+    # stretch at constant velocity. For the constant-velocity filter
+    # that's exact (white-noise-acceleration noise composes over time);
+    # for the IMM filter it's exact up to the slice width. The per-pair
+    # version was the slowest step of a fusion cycle (p95 360 ms on a
     # 45s-cadence Gulf burst of ~120 tracks).
     trk = [tracks[tid] for tid in track_ids]
-    X = np.array([t.kf.x for t in trk])
-    P = np.array([t.kf.P for t in trk])
-    q = np.array([t.kf.accel_std ** 2 for t in trk])
+    t_min = min(t["observed_at"] for t in ticks).timestamp()
     last = np.array([t.last_update.timestamp() for t in trk])
+    base = np.maximum(t_min, last)
+    # Each track's prediction as weighted Gaussian components: one for the
+    # constant-velocity filter, one per motion model for the IMM filter.
+    # Arrays are [component, track, ...].
+    comps = [t.kf.peek_predict_components(b - lu) for t, b, lu in zip(trk, base, last)]
+    W = np.array([[c[k][0] for c in comps] for k in range(len(comps[0]))])
+    X = np.array([[c[k][1] for c in comps] for k in range(len(comps[0]))])
+    P = np.array([[c[k][2] for c in comps] for k in range(len(comps[0]))])
+    q = np.array([t.kf.accel_std ** 2 for t in trk])
+    logW = np.log(np.maximum(W, 1e-300))
 
     cost = np.full((len(ticks), len(track_ids)), UNGATED_COST)
     for i, tick in enumerate(ticks):
-        age = tick["observed_at"].timestamp() - last
+        t = tick["observed_at"].timestamp()
+        age = t - last
         # age can go slightly negative when a batch processes several
         # ADS-B updates for the same track before its radar-derived
         # ticks (radar_sim's latency jitter puts them a few seconds
@@ -75,25 +89,30 @@ def associate(ticks, tracks, max_dist_m, max_staleness_s):
         # estimate, so only reject when the mismatch is larger than
         # the staleness gate would tolerate in either direction.
         fresh = np.abs(age) <= max_staleness_s
-        dt = np.maximum(age, 0.0)
-        dx = tick["x"] - (X[:, 0] + X[:, 2] * dt)
-        dy = tick["y"] - (X[:, 1] + X[:, 3] * dt)
-        dist = np.hypot(dx, dy)
+        dt = np.maximum(t - base, 0.0)
+        dx = tick["x"] - (X[..., 0] + X[..., 2] * dt)
+        dy = tick["y"] - (X[..., 1] + X[..., 3] * dt)
+        dist = np.hypot((W * dx).sum(0), (W * dy).sum(0))  # from the blended mean
         # S = position block of F P F^T + Q, plus R.
         qd = q * dt ** 4 / 4 + tick["r_std"] ** 2
-        sxx = P[:, 0, 0] + 2 * dt * P[:, 0, 2] + dt ** 2 * P[:, 2, 2] + qd
-        syy = P[:, 1, 1] + 2 * dt * P[:, 1, 3] + dt ** 2 * P[:, 3, 3] + qd
-        sxy = P[:, 0, 1] + dt * (P[:, 0, 3] + P[:, 2, 1]) + dt ** 2 * P[:, 2, 3]
+        sxx = P[..., 0, 0] + 2 * dt * P[..., 0, 2] + dt ** 2 * P[..., 2, 2] + qd
+        syy = P[..., 1, 1] + 2 * dt * P[..., 1, 3] + dt ** 2 * P[..., 3, 3] + qd
+        sxy = P[..., 0, 1] + dt * (P[..., 0, 3] + P[..., 2, 1]) + dt ** 2 * P[..., 2, 3]
         det = sxx * syy - sxy ** 2
         mahal2 = (syy * dx ** 2 - 2 * sxy * dx * dy + sxx * dy ** 2) / det
-        gated = fresh & ((dist <= max_dist_m) | (mahal2 <= CHI2_GATE))
+        gated = fresh & ((dist <= max_dist_m) | (mahal2.min(0) <= CHI2_GATE))
         if COST == "likelihood":
             # Negative log-likelihood of the tick under each track's
-            # predicted Gaussian (constants dropped). Plain distance let a
+            # predicted mixture (x2, constants dropped; a single Gaussian
+            # gives Mahalanobis^2 + log det S). Plain distance let a
             # neighbour updated seconds ago, 600 m away with a tight
             # covariance, take a radar contact from a just-gone-dark track
-            # whose 45s prediction is ~1 km off but ~3 km uncertain.
-            cost[i, gated] = (mahal2 + np.log(det))[gated]
+            # whose 45s prediction is ~1 km off but ~3 km uncertain. The
+            # mixture, not its moment-matched blend, matters for the IMM:
+            # over a 45s gap the blend drifts halfway back to straight
+            # flight, while the turn component alone stays on the turn.
+            nll = -2.0 * logsumexp(logW - 0.5 * (mahal2 + np.log(det)), axis=0)
+            cost[i, gated] = nll[gated]
         else:
             cost[i, gated] = dist[gated]
 

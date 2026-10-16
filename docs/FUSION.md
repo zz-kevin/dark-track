@@ -260,9 +260,37 @@ pairs (A04/A05).
   Gulf window (2026-10-16 04:10), the dark track's prediction was ~4 km
   off 50-64 s later, and its first radar contact went to a neighbour
   (or, for FRS41, its formation partner FRS42, whose ADS-B-backed track
-  then absorbed every later contact). An interacting-multiple-model
-  filter (constant-velocity + coordinated-turn) is the standard fix;
-  not attempted yet.
+  then absorbed every later contact).
+
+  *Tried: an interacting-multiple-model filter* (`fusion/imm.py`,
+  constant velocity + coordinated turn, opt-in with `track.FILTER =
+  "imm"`). Association scores a contact against the IMM's per-model
+  mixture, not its blended Gaussian -- over a 45 s gap the blend drifts
+  halfway back to straight flight while the turn component alone stays
+  on the turn (synthetic 3 deg/s turn, 45 s dropout: CV 9.4 km off, IMM
+  blend 2.9 km, turn component 62 m). It doesn't help here. On the
+  development windows:
+
+  | Window | Filter | Went-dark | Kinematic | Accuracy |
+  |---|---|---|---|---|
+  | Gulf 2026-10-16 04:10 | CV | 79.6% | 78.4% | 93.1% |
+  | | IMM (mode tau 120 s / 600 s) | 78.6% / 77.6% | 1.0% / 4.1% | 92.3% / 92.3% |
+  | Gulf 2026-10-14 06:15 | CV / IMM | -- | -- | 99.3% / 99.3% |
+  | NYC 2026-10-10 02:38 | CV / IMM | -- | -- | 84.1% / 80.1% |
+
+  Why: the traced misses aren't steady turns. RWD9308 is in a holding
+  pattern at FL230 -- 180 deg turns joined by short legs, heading
+  changing 40-80 deg between 45 s ADS-B updates -- so nothing predicts
+  45 s ahead; the IMM cut the miss from 3.8 km to 2.7 km, but ABY271,
+  holding in the same stack, still took the contact. And a filter that
+  explains maneuvers stops flagging them: kinematic recall collapsed.
+  What would separate a holding stack is altitude: fusion ignores it,
+  and radar_sim copies ADS-B altitude onto contacts exactly, so using it
+  needs a realistic radar height error first (a simulator change, not
+  a fusion one). (Went-dark/kinematic sweeps on the other two windows
+  were stopped once the target window had decided it; the shared
+  association change was verified identical for the CV filter on 5,684
+  NYC ticks.)
 - **Velocity/position time offset: measured, not used.** OpenSky's
   velocity is from the latest message, ~2.5 s (up to a minute) newer
   than the position fix. The poller now records that time
