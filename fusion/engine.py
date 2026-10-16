@@ -54,6 +54,19 @@ regions = _load_regions()
 # 3s, bench.py measured 27% of ticks under 500 ms; at 0.25s, 100% (p95
 # ~240 ms at 4x Gulf traffic). The two indexed SELECTs per poll are cheap.
 DEFAULT_POLL_SECONDS = 0.25
+# ADS-B ground speed + track fed to the filter as a velocity measurement,
+# std dev in m/s per axis (None: position only, velocity just seeds new
+# tracks). Pins the velocity a 45s prediction depends on -- see
+# docs/FUSION.md "State estimation". Radar velocity is never measured: a
+# real radar plot is a position, radar_sim's speed/heading only seed.
+ADSB_VEL_STD_MPS = 10.0
+VEL_SKIP_GROUND = True
+# ADS-B position noise for the filter. Not the ~10 m a GPS fix is good to:
+# OpenSky's position timestamps jitter by seconds (position-implied speed
+# swings +/-20-30 m/s between fixes), which at 200+ m/s is ~50 m of
+# effective error. 20 m made the filter trust that jitter; see
+# docs/FUSION.md "State estimation".
+R_ADSB_STD_M = 50.0
 # Status line at most this often -- one per 0.25s poll would flood the log.
 STATUS_EVERY_S = 3.0
 
@@ -138,13 +151,26 @@ def _record_update(events, touched, track, tick, created_new_track):
     touched.add(track.id)
 
 
+def _velocity_measurement(tick):
+    """(v, rv_std) for Track.apply: the reported velocity of an ADS-B tick,
+    or (None, None)."""
+    if tick["source"] != "adsb" or ADSB_VEL_STD_MPS is None or tick.get("v0") is None:
+        return None, None
+    # On the ground (OpenSky reports no barometric altitude), a taxiing
+    # aircraft's reported track is unreliable at walking-pace speeds.
+    if VEL_SKIP_GROUND and tick.get("altitude_m") is None:
+        return None, None
+    return tick["v0"], ADSB_VEL_STD_MPS
+
+
 def apply_identified(ticks, tracks, callsign_to_track, accel_std, events, touched):
     """ADS-B ticks with a callsign: unambiguous, update-or-create by identity."""
     for tick in sorted(ticks, key=lambda t: t["observed_at"]):
         tid = callsign_to_track.get(tick["external_id"])
         track = tracks.get(tid)
         if track is not None:
-            track.apply(tick["x"], tick["y"], tick["observed_at"], "adsb", tick["r_std"])
+            track.apply(tick["x"], tick["y"], tick["observed_at"], "adsb", tick["r_std"],
+                        *_velocity_measurement(tick))
             track.note_type(tick.get("aircraft_type"), tick.get("aircraft_variant"))
             track.last_adsb_alt_m = tick.get("altitude_m")
             _record_update(events, touched, track, tick, created_new_track=False)
@@ -191,7 +217,7 @@ def _apply_anonymous_slice(ticks, tracks, accel_std, gate_dist_m, gate_staleness
         track = tracks.get(tid)
         if track is not None:
             track.apply(tick["x"], tick["y"], tick["observed_at"],
-                        tick["source"], tick["r_std"])
+                        tick["source"], tick["r_std"], *_velocity_measurement(tick))
             _record_update(events, touched, track, tick, created_new_track=False)
         else:
             track = new_track(tick, accel_std)
@@ -362,11 +388,14 @@ def parse_args():
     p.add_argument("--track-ttl-s", type=float, default=None,
                     help="retire a track after this long with no update "
                          "(default: scaled to the measured ADS-B interval, min 120s)")
-    p.add_argument("--r-adsb-std-m", type=float, default=20.0,
+    p.add_argument("--r-adsb-std-m", type=float, default=R_ADSB_STD_M,
                     help="assumed ADS-B position measurement noise, meters")
     p.add_argument("--r-radar-std-m", type=float, default=150.0,
                     help="assumed radar position measurement noise, meters "
                          "-- should match radar_sim.py's --noise-std-m")
+    p.add_argument("--adsb-vel-std", type=float, default=ADSB_VEL_STD_MPS,
+                    help="ADS-B reported velocity noise, m/s per axis, when used "
+                         "as a filter measurement (0: position only)")
     p.add_argument("--accel-std", type=float, default=3.0,
                     help="process noise: expected accel, m/s^2")
     p.add_argument("--region", choices=sorted(regions.REGIONS), default=None,
@@ -379,6 +408,7 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
+    ADSB_VEL_STD_MPS = args.adsb_vel_std or None
     run(
         poll_seconds=args.poll_seconds,
         gate_dist_m=args.gate_dist_m,

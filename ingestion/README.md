@@ -131,4 +131,4 @@ Run `python3 db.py` once to add the column to an existing database.
 - [x] Week 1 — OpenSky poller proof-of-life
 - [x] Weeks 2–4 — shared schema, radar simulator, replay
 - [x] Ground truth for radar contacts (`truth_tick_id`, `radar_truth.py`), used to measure fusion accuracy
-- [x] Fresh NYC validation capture, 2026-10-15 22:50-23:20 UTC (radar with exact `truth_tick_id`)
+- [x] Fresh NYC validation captures, 2026-10-15 22:50-23:20 and 2026-10-16 01:30-02:00 UTC (radar with exact `truth_tick_id`)

@@ -48,10 +48,10 @@ class Track:
         # divide by zero.
         self.last_innovation_std_m = (2 * init_pos_var) ** 0.5
 
-    def apply(self, x, y, observed_at, source, r_std):
+    def apply(self, x, y, observed_at, source, r_std, v=None, rv_std=None):
         dt = (observed_at - self.last_update).total_seconds()
         self.kf.predict(dt)
-        innovation = self.kf.update((x, y), r_std)
+        innovation = self.kf.update((x, y), r_std, v, rv_std)
         self.last_residual_m = float(math.hypot(*innovation))
         self.last_innovation_std_m = self.kf.last_innovation_std_m
         self.last_update = observed_at

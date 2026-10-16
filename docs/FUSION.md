@@ -10,7 +10,7 @@ meters (`fusion/geo.py`), not lat/lon degrees.
 combining a trustworthy source with an untrustworthy one into "one
 confident picture" — that requires representing *how much* to trust each
 measurement. A Kalman filter's per-update measurement noise `R` does this
-directly: ADS-B updates use `R_adsb` (std dev ~20m), radar updates use
+directly: ADS-B updates use `R_adsb` (std dev 50m -- see below), radar updates use
 `R_radar` (std dev ~150m, matching `radar_sim.py`'s injected noise). The
 filter's gain naturally weights a trusted ADS-B fix far more than a noisy
 radar one on the same track, and still lets radar alone keep updating the
@@ -19,15 +19,47 @@ natural per-measurement confidence input — you'd have to hand-tune
 separate alpha/beta constants per source, which is really just a Kalman
 filter with the covariance bookkeeping thrown away.
 
-Only position is measured (`H` selects `x, y`); velocity/heading carried
-on raw ticks is not fed into the filter as a measurement -- but it does
-seed a *new* track's initial velocity (with a tighter initial velocity
-variance), so a just-created track predicts forward instead of standing
-still until its second position fix (98.4% -> 99.2% radar association on
-Gulf data). The flat-earth reference point (`geo.py`) is set at engine
-startup to the center of recent ADS-B data rather than fixed at NYC.
-Otherwise, so both sources share the same
-measurement model. Process noise is a discretized white-noise-acceleration
+**What's measured.** Radar measures position only. ADS-B measures
+position *and* velocity: the reported ground speed and track feed the
+filter on every airborne ADS-B update (`H` = identity, velocity std
+10 m/s per axis, `engine.ADSB_VEL_STD_MPS`). Reported velocity also seeds
+a *new* track's velocity from either source, so a just-created track
+predicts forward instead of standing still (98.4% -> 99.2% radar
+association on Gulf data when that was added).
+
+Measuring velocity pins down exactly what a 45s prediction depends on.
+Before, the filter had to infer velocity from positions, and a radar
+contact arriving 1-4 s after an ADS-B fix, with 150 m of noise, could
+swing it by tens of m/s -- Gulf ADS-B residuals were ~1 km at every
+update. Measured on validation windows nothing was tuned on: Gulf fused
+position error p50 46-49 m -> 24-25 m, accuracy +2 points, went-dark
+recall up 1-3 points with false alarms down, kinematic recall 15-26% ->
+73-93% (a maneuver now shows up as a velocity the filter believes, not
+just a position it might put down to noise). Numbers by window in
+anomaly/README.md and below.
+
+Two things had to come with it, both found on the development windows:
+
+- **ADS-B position noise 20 m -> 50 m** (`engine.R_ADSB_STD_M`). An ADS-B
+  fix is good to ~10 m, but OpenSky's position timestamps jitter by
+  seconds -- position-implied speed swings +/-20-30 m/s between fixes --
+  which at airliner speeds is tens of metres of effective error. At
+  20 m, with velocity also pinned, the filter had nowhere to put that
+  jitter, and NYC accuracy fell (82.8% -> 77.5%). 50 m alone (no
+  velocity) was the best NYC setting found (87.4%), and with velocity
+  it kept Gulf's gains.
+- **No velocity measurement on the ground** (`engine.VEL_SKIP_GROUND`,
+  no barometric altitude): a taxiing aircraft's reported track at
+  walking pace is noise. NYC 81.5% -> 84.1% on the development window.
+
+The trade-off taken: on NYC all-traffic accuracy, position-noise-only
+(87.4% on the development window) beats the chosen setting (84.1%); the
+chosen setting is ahead on everything else, and NYC airborne accuracy
+stays above 90% either way. NYC's all-traffic number is dominated by
+ground traffic that position alone can't resolve (see Measured accuracy).
+
+The flat-earth reference point (`geo.py`) is set at engine startup to
+the center of recent ADS-B data rather than fixed at NYC. Process noise is a discretized white-noise-acceleration
 model (`accel_std`, default 3 m/s²) — large enough to follow real turns
 and speed changes, tuned by eye rather than against a labeled maneuver
 dataset (see Known limitations).
@@ -146,20 +178,27 @@ an aircraft passes at >= 90% correct contacts.
 
 | Window | Role | Aircraft passing | Airborne only | Contacts correct | Fused error p50 / p95 |
 |---|---|---|---|---|---|
-| NYC 2026-10-15 22:50-23:20 | validation | **87.8%** (266/303) | 97.4% | 95.0% | 19 / 99 m |
-| Gulf 2026-10-12 05:00-05:15 | validation | **95.1%** (135/142) | 95.0% | 98.5% | 47 / 154 m |
-| Gulf 2026-10-11 05:45-06:00 | validation | **97.5%** (155/159) | 97.5% | 99.5% | 45 / 153 m |
-| Gulf 2026-10-13 05:30-05:45 | held-out | 95.0% (151/159) | 95.5% | 98.0% | 46 / 161 m |
-| Gulf 2026-10-14 06:15-06:30 | held-out, then dev | 94.7% (144/152) | 95.3% | 98.2% | 47 / 164 m |
-| Gulf 2026-10-10 02:01-02:16 | tuning | 96.6% (142/147) | 96.5% | 98.8% | 43 / 140 m |
-| NYC 2026-10-10 02:38-03:08 | tuning | 82.8% (125/151) | 90.1% | 94.5% | 22 / 161 m |
+| NYC 2026-10-16 01:30-02:00 | validation | **81.2%** (173/213) | 93.0% | 94.9% | 25 / 140 m |
+| Gulf 2026-10-13 20:00-20:15 | validation | **98.5%** (132/134) | 99.2% | 99.6% | 25 / 59 m |
+| Gulf 2026-10-12 20:30-20:45 | validation | **97.1%** (135/139) | 97.0% | 99.5% | 24 / 58 m |
+| NYC 2026-10-15 22:50-23:20 | validation, earlier | 89.8% (272/303) | 98.5% | 95.2% | 24 / 87 m |
+| Gulf 2026-10-12 05:00-05:15 | validation, earlier | 98.6% (140/142) | 98.6% | 99.7% | 24 / 54 m |
+| Gulf 2026-10-11 05:45-06:00 | validation, earlier | 100.0% (159/159) | 100.0% | 100.0% | 23 / 56 m |
+| Gulf 2026-10-13 05:30-05:45 | development | 98.1% (156/159) | 98.7% | 99.6% | 23 / 59 m |
+| Gulf 2026-10-14 06:15-06:30 | development | 99.3% (151/152) | 100.0% | 99.7% | 24 / 60 m |
+| Gulf 2026-10-10 02:01-02:16 | development | 99.3% (146/147) | 99.3% | 99.8% | 24 / 53 m |
+| NYC 2026-10-10 02:38-03:08 | development | 84.1% (127/151) | 92.4% | 95.0% | 27 / 141 m |
 
-The likelihood cost (vs. Euclidean, same everything else) took the
+Roles as in anomaly/README.md. Gulf clears the 90% target everywhere
+(97.1-100%). NYC airborne does too (92.4-98.5%); NYC all-traffic
+doesn't (81.2-89.8%), because of ground traffic -- the 2026-10-16
+capture, at night, has proportionally more of it.
+
+Earlier round: the likelihood cost (vs. Euclidean, same everything else) took the
 fresh NYC capture from 83.2% to 87.8% and the NYC tuning window from
 77.5% to 82.8%; on Gulf the two are within one aircraft of each other.
 
-Where NYC loses it: almost entirely on the ground (airborne passes at
-97.4% on the validation capture). On the tuning window the airborne
+Where NYC loses it: almost entirely on the ground. On the tuning window the airborne
 misses were mostly fused positions > 300 m off during approach turns (a
 constant-velocity filter lags a turn); on the ground,
 contacts swapped between taxiing neighbours (254 of the 257 ground
@@ -212,7 +251,15 @@ pairs (A04/A05).
   reference point between them and distort distances by ~10%. Replay
   tools take `--region`; the live engine warns and takes `--region` too.
 - **Constant-velocity model.** Turns and accelerating departures are
-  followed late. Reported ADS-B speed/heading only seeds a new track's
-  velocity; feeding it as a velocity measurement on every ADS-B update
-  would pin the velocity and shrink the 45s prediction error that the
-  item above depends on.
+  followed late, less so now that ADS-B velocity is measured. Once
+  ADS-B drops, the track coasts on its last velocity and radar alone.
+  OpenSky's velocity is also sampled slightly later than the position
+  it ships with, so during NYC approach turns the two disagree; nothing
+  models that offset (the raw tick doesn't store OpenSky's
+  `last_contact`).
+- **Ground traffic is mostly a sensor limit.** Of 179 NYC ground radar
+  contacts that landed on another aircraft's track, the median true
+  separation from that aircraft was 245 m, and 63% were under 300 m --
+  inside two radar standard deviations, so position can't tell them
+  apart. The quarter beyond 425 m might yield to ground-specific
+  handling; went-dark ignores ground traffic regardless.

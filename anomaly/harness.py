@@ -32,6 +32,7 @@ run ingestion/opensky_poll.py + ingestion/radar_sim.py for a while first.
 import argparse
 import importlib.util
 import sys
+import zlib
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -207,7 +208,8 @@ def sweep(kind, ticks, params, latency_budget_s):
             if kind == "went_dark":
                 modified, gt = inject.inject_went_dark(ticks, eid)
             else:
-                modified, gt = inject.inject_kinematic_jump(ticks, eid, radar_sources=radar_sources)
+                modified, gt = inject.inject_kinematic_jump(
+                    ticks, eid, radar_sources=radar_sources, seed=zlib.crc32(eid.encode()))
         except ValueError as e:
             skipped.append((eid, str(e)))
             continue
@@ -304,8 +306,9 @@ def main():
             modified, gt = inject.inject_went_dark(ticks, args.external_id)
         else:
             radar_sources, _ = radar_truth.label(ticks)
-            modified, gt = inject.inject_kinematic_jump(ticks, args.external_id,
-                                                        radar_sources=radar_sources)
+            modified, gt = inject.inject_kinematic_jump(
+                ticks, args.external_id, radar_sources=radar_sources,
+                seed=zlib.crc32(args.external_id.encode()))
         detections = run_scenario(modified, params)
         tp, fps = score(detections, gt, budget)
         print(f"ground truth: {gt}")

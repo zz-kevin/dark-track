@@ -211,6 +211,21 @@ Record real decisions here as they're made, in the format:
 > but it changes the filter, not just association, and needs its own
 > evaluation.
 
+> **Decision:** ADS-B velocity is a filter measurement on airborne
+> updates (10 m/s), and ADS-B position noise is 50 m (was position-only,
+> 20 m).
+> **Alternatives considered:** position noise 50 m alone; velocity at
+> 5 m/s with 20 m; velocity on ground fixes too.
+> **Why:** a 5-config grid on two development windows. Velocity was a
+> large win on Gulf (accuracy 94.7% -> 99.3%, kinematic recall 27% ->
+> 85%) and hurt NYC at 20 m position noise, because OpenSky's position
+> timestamps jitter and pinned velocity left nowhere to absorb it.
+> 50 m + velocity, skipping taxiing aircraft, was the best overall; the
+> 50 m-only setting was better on NYC all-traffic accuracy alone. Frozen,
+> then scored against the previous config on three untouched windows,
+> including a second fresh NYC capture: better or equal on every metric
+> except NYC kinematic recall (40% -> 36%, false alarms 3.7% -> 1.1%).
+
 > **Decision:** `api/` is a stdlib `http.server`, read-only, serving
 > `web/` from the same origin; replays re-run fusion + detection in
 > memory per request (cached).
