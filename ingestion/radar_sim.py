@@ -57,7 +57,8 @@ def advance(lat, lon, velocity, heading, seconds):
     return lat + dlat, lon + dlon
 
 
-def make_radar_row(adsb_row, noise_std_m, latency_min, latency_max, rng):
+def make_radar_row(adsb_row, noise_std_m, latency_min, latency_max, rng,
+                   height_noise_std_m=300.0):
     latency = rng.uniform(latency_min, latency_max)
     velocity = adsb_row["velocity_mps"]
     heading = adsb_row["heading_deg"]
@@ -72,7 +73,11 @@ def make_radar_row(adsb_row, noise_std_m, latency_min, latency_max, rng):
         "external_id": None,  # no ID -- the whole point of this source
         "lat": lat,
         "lon": lon,
-        "altitude_m": adsb_row["altitude_m"],
+        # A 3D surveillance radar measures height, coarsely. (Until
+        # 2026-10-16 this copied the ADS-B altitude exactly.)
+        "altitude_m": (adsb_row["altitude_m"] + rng.gauss(0, height_noise_std_m)
+                       if adsb_row["altitude_m"] is not None else None),
+        "altitude_std_m": height_noise_std_m if adsb_row["altitude_m"] is not None else None,
         "velocity_mps": velocity + rng.gauss(0, 2.0) if velocity is not None else None,
         "heading_deg": heading + rng.gauss(0, 3.0) if heading is not None else None,
         "observed_at": adsb_row["observed_at"] + timedelta(seconds=latency),
@@ -83,7 +88,7 @@ def make_radar_row(adsb_row, noise_std_m, latency_min, latency_max, rng):
 
 
 def run(poll_seconds, dropout_prob, noise_std_m, latency_min, latency_max,
-        seed, since_id):
+        seed, since_id, height_noise_std_m):
     rng = random.Random(seed)
     cursor = since_id if since_id is not None else db.latest_id("adsb")
     print(
@@ -103,7 +108,8 @@ def run(poll_seconds, dropout_prob, noise_std_m, latency_min, latency_max,
                     dropped += 1
                     continue
                 radar_rows.append(
-                    make_radar_row(row, noise_std_m, latency_min, latency_max, rng)
+                    make_radar_row(row, noise_std_m, latency_min, latency_max, rng,
+                                   height_noise_std_m)
                 )
             if new_rows:
                 if radar_rows:
@@ -129,6 +135,8 @@ def parse_args():
                     help="probability a given adsb tick is not detected at all")
     p.add_argument("--noise-std-m", type=float, default=150.0,
                     help="Gaussian position noise std dev, meters")
+    p.add_argument("--height-noise-std-m", type=float, default=300.0,
+                    help="Gaussian height error std dev, meters (3D radar)")
     p.add_argument("--latency-min", type=float, default=1.0,
                     help="minimum simulated sensor latency, seconds")
     p.add_argument("--latency-max", type=float, default=4.0,
@@ -151,4 +159,5 @@ if __name__ == "__main__":
         latency_max=args.latency_max,
         seed=args.seed,
         since_id=args.since_id,
+        height_noise_std_m=args.height_noise_std_m,
     )

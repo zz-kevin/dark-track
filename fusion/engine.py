@@ -70,6 +70,8 @@ VEL_TIME_OFFSET = False
 # effective error. 20 m made the filter trust that jitter; see
 # docs/FUSION.md "State estimation".
 R_ADSB_STD_M = 50.0
+# ADS-B barometric altitude, quantized to 25 ft.
+ADSB_ALT_STD_M = 15.0
 # Status line at most this often -- one per 0.25s poll would flood the log.
 STATUS_EVERY_S = 3.0
 # Longest wait between retries while the database is down.
@@ -115,6 +117,13 @@ def tick_from_row(row, source, r_std):
         "altitude_m": row.get("altitude_m"),
         # How much newer the reported velocity is than the position fix
         # (0 when unknown -- rows from before velocity_at was recorded).
+        # Altitude for association (associate.py): ADS-B baro altitude, or a
+        # radar contact's height with its recorded error. A radar row with
+        # no recorded error predates simulated height error and carries the
+        # ADS-B altitude exactly -- not something a radar measures, so it's
+        # not used (simulate.py degrades those rows before fusing them).
+        "alt": row.get("altitude_m") if source == "adsb" or row.get("altitude_std_m") else None,
+        "alt_std": ADSB_ALT_STD_M if source == "adsb" else row.get("altitude_std_m"),
         "velocity_lead_s": (
             (row["velocity_at"] - row["observed_at"]).total_seconds()
             if row.get("velocity_at") is not None else 0.0
@@ -189,11 +198,13 @@ def apply_identified(ticks, tracks, callsign_to_track, accel_std, events, touche
                         *_velocity_measurement(tick, accel_std))
             track.note_type(tick.get("aircraft_type"), tick.get("aircraft_variant"))
             track.last_adsb_alt_m = tick.get("altitude_m")
+            track.observe_altitude(tick.get("alt"), tick.get("alt_std"), tick["observed_at"])
             _record_update(events, touched, track, tick, created_new_track=False)
         else:
             track = new_track(tick, accel_std, external_id=tick["external_id"])
             track.note_type(tick.get("aircraft_type"), tick.get("aircraft_variant"))
             track.last_adsb_alt_m = tick.get("altitude_m")
+            track.observe_altitude(tick.get("alt"), tick.get("alt_std"), tick["observed_at"])
             tracks[track.id] = track
             callsign_to_track[tick["external_id"]] = track.id
             _record_update(events, touched, track, tick, created_new_track=True)
@@ -234,9 +245,11 @@ def _apply_anonymous_slice(ticks, tracks, accel_std, gate_dist_m, gate_staleness
         if track is not None:
             track.apply(tick["x"], tick["y"], tick["observed_at"],
                         tick["source"], tick["r_std"], *_velocity_measurement(tick, accel_std))
+            track.observe_altitude(tick.get("alt"), tick.get("alt_std"), tick["observed_at"])
             _record_update(events, touched, track, tick, created_new_track=False)
         else:
             track = new_track(tick, accel_std)
+            track.observe_altitude(tick.get("alt"), tick.get("alt_std"), tick["observed_at"])
             tracks[track.id] = track
             _record_update(events, touched, track, tick, created_new_track=True)
 

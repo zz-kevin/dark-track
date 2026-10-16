@@ -126,6 +126,12 @@ column existed are matched back by `radar_truth.py` (99.2% of NYC and
 100% of Gulf contacts labeled unambiguously; the rest are left unscored).
 Run `python3 db.py` once to add the column to an existing database.
 
+Radar contacts carry a simulated height error (default 300 m,
+`radar_sim.py --height-noise-std-m`) and record it in `altitude_std_m`.
+Contacts written before 2026-10-16 ~06:30 UTC carry the ADS-B altitude
+exactly (`altitude_std_m` NULL); replay tools add the same error when
+they read them (fusion/simulate.py).
+
 ADS-B rows also carry `velocity_at` (OpenSky's `last_contact`): the
 reported speed/heading come from the aircraft's latest message, usually
 ~2.5 s newer than the position fix in `observed_at`. Recorded since

@@ -120,6 +120,66 @@ def _gated_reference(tick, track, max_dist, max_age):
     return float(d @ np.linalg.solve(S, d)) <= associate.CHI2_GATE
 
 
+class AltitudeTest(unittest.TestCase):
+    def setUp(self):
+        self._alt = associate.USE_ALTITUDE
+
+    def tearDown(self):
+        associate.USE_ALTITUDE = self._alt
+
+    def _stack(self):
+        """Two tracks the same distance from the contact, 2 km apart in
+        height -- a holding stack."""
+        low, high = _track(-300, 0), _track(300, 0)
+        low.observe_altitude(5000.0, 15.0, T0)
+        high.observe_altitude(7000.0, 15.0, T0)
+        tick = {**_tick(0, 0), "alt": 7050.0, "alt_std": 300.0}
+        return {1: low, 2: high}, tick
+
+    def test_altitude_picks_the_right_level(self):
+        tracks, tick = self._stack()
+        associate.USE_ALTITUDE = True
+        self.assertEqual(associate.associate([tick], tracks, 800, 30), [2])
+
+    def test_altitude_gate_rejects_wrong_level(self):
+        tracks, tick = self._stack()
+        del tracks[2]
+        associate.USE_ALTITUDE = True
+        self.assertEqual(associate.associate([tick], tracks, 800, 30), [None])
+        associate.USE_ALTITUDE = False
+        self.assertEqual(associate.associate([tick], tracks, 800, 30), [1])
+
+    def test_track_without_altitude_does_not_win_by_default(self):
+        tracks, tick = self._stack()
+        tracks[1] = _track(-300, 0)  # no altitude estimate at all
+        associate.USE_ALTITUDE = True
+        self.assertEqual(associate.associate([tick], tracks, 800, 30), [2])
+
+    def test_contact_without_altitude_is_scored_horizontally(self):
+        tracks, tick = self._stack()
+        tick["alt"] = None
+        associate.USE_ALTITUDE = True
+        self.assertIsNotNone(associate.associate([tick], tracks, 800, 30)[0])
+
+
+class AltitudeFilterTest(unittest.TestCase):
+    def test_single_glitch_is_ignored(self):
+        """FRS91, 2026-10-16: 937 m between two ~5,000 m fixes 2 s apart."""
+        from altitude import AltitudeFilter
+        f = AltitudeFilter(4999.0, 15.0, T0)
+        f.update(937.0, 15.0, T0 + timedelta(seconds=2))
+        f.update(4580.0, 15.0, T0 + timedelta(seconds=45))
+        self.assertAlmostEqual(f.x[0], 4580.0, delta=20)
+        self.assertLess(abs(f.x[1]), 20.0)
+
+    def test_real_jump_is_accepted_after_repeats(self):
+        from altitude import AltitudeFilter
+        f = AltitudeFilter(5000.0, 15.0, T0)
+        for i in range(1, 4):
+            f.update(1000.0, 15.0, T0 + timedelta(seconds=i))
+        self.assertAlmostEqual(f.x[0], 1000.0, delta=20)
+
+
 class EngineTest(unittest.TestCase):
     def test_two_contacts_of_one_aircraft_in_one_batch_both_join(self):
         track = _track(0, 0, vx=200.0, vel_var=1.0)

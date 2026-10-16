@@ -33,6 +33,8 @@ case greedy handles worst and this project's radar noise (150m std) makes
 common in busy airspace.
 """
 
+from datetime import datetime, timezone
+
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 from scipy.special import logsumexp
@@ -40,6 +42,13 @@ from scipy.special import logsumexp
 UNGATED_COST = 1e9
 # "likelihood" or "euclidean" -- see associate()'s cost comment.
 COST = "likelihood"
+# Altitude in the likelihood and gate (altitude.py). Chi-square, 1 degree
+# of freedom, 99.9%; vague prior for tracks with no height yet. Off: it
+# fixed a traced holding-stack miss but was neutral on six validation
+# windows (docs/FUSION.md), so it's an opt-in.
+USE_ALTITUDE = False
+ALT_CHI2_GATE = 10.83
+UNKNOWN_ALT_STD = 3000.0
 # Chi-square, 2 degrees of freedom, 99.9%: a true match falls outside this
 # only 1 time in 1000 if the filter's covariance is honest.
 CHI2_GATE = 13.82
@@ -75,6 +84,13 @@ def associate(ticks, tracks, max_dist_m, max_staleness_s):
     P = np.array([[c[k][2] for c in comps] for k in range(len(comps[0]))])
     q = np.array([t.kf.accel_std ** 2 for t in trk])
     logW = np.log(np.maximum(W, 1e-300))
+    # Altitude predicted at each track's base time (the sub-second rest of
+    # the slice is ignored: < 20 m even climbing). NaN = no estimate yet.
+    alt = [t.alt.peek(datetime.fromtimestamp(b, tz=timezone.utc))
+           if USE_ALTITUDE and t.alt else (np.nan, np.nan)
+           for t, b in zip(trk, base)]
+    H = np.array([a[0] for a in alt])
+    VH = np.array([a[1] for a in alt])
 
     cost = np.full((len(ticks), len(track_ids)), UNGATED_COST)
     for i, tick in enumerate(ticks):
@@ -101,6 +117,16 @@ def associate(ticks, tracks, max_dist_m, max_staleness_s):
         det = sxx * syy - sxy ** 2
         mahal2 = (syy * dx ** 2 - 2 * sxy * dx * dy + sxx * dy ** 2) / det
         gated = fresh & ((dist <= max_dist_m) | (mahal2.min(0) <= CHI2_GATE))
+        alt_term = 0.0
+        if USE_ALTITUDE and tick.get("alt") is not None:
+            # Height as a third, independent dimension of the likelihood. A
+            # track with no altitude estimate is scored under a vague prior,
+            # so it doesn't win just by having nothing to disagree with.
+            known = ~np.isnan(H)
+            sz = np.where(known, VH, UNKNOWN_ALT_STD ** 2) + tick["alt_std"] ** 2
+            dz = np.where(known, tick["alt"] - H, 0.0)
+            alt_term = dz ** 2 / sz + np.log(sz)
+            gated &= dz ** 2 / sz <= ALT_CHI2_GATE
         if COST == "likelihood":
             # Negative log-likelihood of the tick under each track's
             # predicted mixture (x2, constants dropped; a single Gaussian
@@ -111,7 +137,7 @@ def associate(ticks, tracks, max_dist_m, max_staleness_s):
             # mixture, not its moment-matched blend, matters for the IMM:
             # over a 45s gap the blend drifts halfway back to straight
             # flight, while the turn component alone stays on the turn.
-            nll = -2.0 * logsumexp(logW - 0.5 * (mahal2 + np.log(det)), axis=0)
+            nll = -2.0 * logsumexp(logW - 0.5 * (mahal2 + np.log(det)), axis=0) + alt_term
             cost[i, gated] = nll[gated]
         else:
             cost[i, gated] = dist[gated]

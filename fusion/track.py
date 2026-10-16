@@ -10,6 +10,7 @@ detector (weeks 10-11) will threshold on.
 
 import math
 
+from altitude import AltitudeFilter
 from imm import IMMFilter
 from kalman import KalmanFilter
 
@@ -41,6 +42,9 @@ class Track:
         # reported no barometric altitude, which it does for aircraft on the
         # ground). anomaly/'s went-dark detector skips ground traffic.
         self.last_adsb_alt_m = None
+        # Altitude estimate for association (altitude.py), from ADS-B and
+        # radar heights; None until a tick with an altitude arrives.
+        self.alt = None
         self.adsb_hits = 1 if source == "adsb" else 0
         self.radar_hits = 1 if source == "radar" else 0
         self.last_residual_m = 0.0
@@ -66,6 +70,14 @@ class Track:
         else:
             self.last_radar_at = observed_at
             self.radar_hits += 1
+
+    def observe_altitude(self, h, std, at):
+        if h is None or std is None:
+            return
+        if self.alt is None:
+            self.alt = AltitudeFilter(h, std, at)
+        else:
+            self.alt.update(h, std, at)
 
     def note_type(self, aircraft_type, aircraft_variant):
         """Record type from an ADS-B tick. A later tick with no type never
