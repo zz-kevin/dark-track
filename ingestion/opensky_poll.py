@@ -71,6 +71,7 @@ OPENSKY_URL = "https://opensky-network.org/api/states/all"
 IDX_ICAO24 = 0
 IDX_CALLSIGN = 1
 IDX_TIME_POSITION = 3
+IDX_LAST_CONTACT = 4  # latest message of any kind -- what velocity is as of
 IDX_LON = 5
 IDX_LAT = 6
 IDX_BARO_ALT = 7
@@ -195,6 +196,13 @@ def to_rows(data, fetched_at, classifier, watched_only=False):
             "velocity_mps": s[IDX_VELOCITY],
             "heading_deg": s[IDX_TRUE_TRACK],
             "observed_at": observed_at,
+            # Velocity comes from the latest velocity message, which can be
+            # seconds newer than the position fix (observed_at); fusion
+            # weights it by the gap. Approximated by last_contact.
+            "velocity_at": (
+                datetime.fromtimestamp(s[IDX_LAST_CONTACT], tz=timezone.utc)
+                if s[IDX_LAST_CONTACT] is not None else None
+            ),
             "icao24": icao24,
             "aircraft_type": aircraft_type,
             "aircraft_variant": aircraft_variant,

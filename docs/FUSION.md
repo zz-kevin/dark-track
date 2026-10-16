@@ -181,16 +181,19 @@ an aircraft passes at >= 90% correct contacts.
 | NYC 2026-10-16 01:30-02:00 | validation | **81.2%** (173/213) | 93.0% | 94.9% | 25 / 140 m |
 | Gulf 2026-10-13 20:00-20:15 | validation | **98.5%** (132/134) | 99.2% | 99.6% | 25 / 59 m |
 | Gulf 2026-10-12 20:30-20:45 | validation | **97.1%** (135/139) | 97.0% | 99.5% | 24 / 58 m |
+| Gulf 2026-10-16 04:30-04:45 | validation | **91.7%** (66/72) | 91.8% | 96.9% | 29 / 147 m |
+| Gulf 2026-10-16 04:45-05:00 | validation | **93.8%** (122/130) | 94.3% | 96.4% | 25 / 84 m |
 | NYC 2026-10-15 22:50-23:20 | validation, earlier | 89.8% (272/303) | 98.5% | 95.2% | 24 / 87 m |
 | Gulf 2026-10-12 05:00-05:15 | validation, earlier | 98.6% (140/142) | 98.6% | 99.7% | 24 / 54 m |
 | Gulf 2026-10-11 05:45-06:00 | validation, earlier | 100.0% (159/159) | 100.0% | 100.0% | 23 / 56 m |
+| Gulf 2026-10-16 04:10-04:25 | development | 93.1% (121/130) | 94.2% | 97.7% | 26 / 76 m |
 | Gulf 2026-10-13 05:30-05:45 | development | 98.1% (156/159) | 98.7% | 99.6% | 23 / 59 m |
 | Gulf 2026-10-14 06:15-06:30 | development | 99.3% (151/152) | 100.0% | 99.7% | 24 / 60 m |
 | Gulf 2026-10-10 02:01-02:16 | development | 99.3% (146/147) | 99.3% | 99.8% | 24 / 53 m |
 | NYC 2026-10-10 02:38-03:08 | development | 84.1% (127/151) | 92.4% | 95.0% | 27 / 141 m |
 
 Roles as in anomaly/README.md. Gulf clears the 90% target everywhere
-(97.1-100%). NYC airborne does too (92.4-98.5%); NYC all-traffic
+(91.7-100%; the Gulf morning capture is the low end). NYC airborne does too (92.4-98.5%); NYC all-traffic
 doesn't (81.2-89.8%), because of ground traffic -- the 2026-10-16
 capture, at night, has proportionally more of it.
 
@@ -252,14 +255,29 @@ pairs (A04/A05).
   tools take `--region`; the live engine warns and takes `--region` too.
 - **Constant-velocity model.** Turns and accelerating departures are
   followed late, less so now that ADS-B velocity is measured. Once
-  ADS-B drops, the track coasts on its last velocity and radar alone.
-  OpenSky's velocity is also sampled slightly later than the position
-  it ships with, so during NYC approach turns the two disagree; nothing
-  models that offset (the raw tick doesn't store OpenSky's
-  `last_contact`).
-- **Ground traffic is mostly a sensor limit.** Of 179 NYC ground radar
-  contacts that landed on another aircraft's track, the median true
-  separation from that aircraft was 245 m, and 63% were under 300 m --
-  inside two radar standard deviations, so position can't tell them
-  apart. The quarter beyond 425 m might yield to ground-specific
-  handling; went-dark ignores ground traffic regardless.
+  ADS-B drops, the track coasts on its last velocity and radar alone, so
+  a dropout *during a turn* is the hardest case: on a morning-arrivals
+  Gulf window (2026-10-16 04:10), the dark track's prediction was ~4 km
+  off 50-64 s later, and its first radar contact went to a neighbour
+  (or, for FRS41, its formation partner FRS42, whose ADS-B-backed track
+  then absorbed every later contact). An interacting-multiple-model
+  filter (constant-velocity + coordinated-turn) is the standard fix;
+  not attempted yet.
+- **Velocity/position time offset: measured, not used.** OpenSky's
+  velocity is from the latest message, ~2.5 s (up to a minute) newer
+  than the position fix. The poller now records that time
+  (`raw_ticks.velocity_at`, from `last_contact`), and the filter can
+  inflate the velocity noise by `accel_std * offset`
+  (`engine.VEL_TIME_OFFSET`). On the first window with the column
+  (Gulf 2026-10-16 04:10) it made things slightly worse -- accuracy
+  93.1% -> 90.8%, kinematic recall 78.4% -> 73.2%, went-dark +1 point --
+  so it's off. It was aimed at NYC approach turns; it needs an NYC
+  capture with `velocity_at` to judge there.
+- **Ground traffic is a sensor limit.** Of the NYC ground radar
+  contacts that landed on another aircraft's track, 93% (158/169) were
+  *more likely* under that aircraft's predicted position than under
+  their own -- the radar noise (150 m) put them there, and no
+  assignment rule using position can do better. Median true separation
+  between the two aircraft: 245 m. Skipping velocity only below taxi
+  speed (so takeoff rolls keep it) changed nothing measurable. Went-dark
+  ignores ground traffic regardless.

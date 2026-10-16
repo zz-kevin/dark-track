@@ -48,7 +48,7 @@ Add `--region nyc|gulf` if both pollers ran during the window. `bench.py`
 writes to `dark_track_bench` (created if missing), never the live tables.
 
 **Accuracy** (aircraft with >= 90% of radar contacts on their own track,
-within 300 m, within 5 s), on validation windows: Gulf 98.5% / 97.1%,
+within 300 m, within 5 s), on validation windows: Gulf 91.7-98.5%,
 NYC 81.2% (93.0% airborne -- the gap is taxiing traffic). Every window,
 and the failure analysis, in [`../docs/FUSION.md`](../docs/FUSION.md).
 
@@ -85,6 +85,10 @@ interval, which no fusion change can affect.
       untouched validation windows (docs/FUSION.md, anomaly/README.md).
 - [x] ADS-B velocity as a filter measurement (airborne), ADS-B position
       noise 50 m; validated on fresh windows (docs/FUSION.md).
-- [ ] Next: ground-traffic association at NYC -- most swaps are
-      between aircraft inside two radar sigmas, so expect limited gains;
-      OpenSky's position/velocity time offset during turns.
+- [x] Ground traffic: 93% of NYC ground swaps are Bayes-limited (the
+      contact really is likelier under the other aircraft) -- closed as
+      a sensor limit. Velocity time offset: recorded, measured worse on
+      Gulf, off pending an NYC capture with `velocity_at`.
+- [ ] Next: interacting-multiple-model filter (constant velocity +
+      coordinated turn) for dropouts during turns -- the main source of
+      went-dark misses on Gulf morning traffic.

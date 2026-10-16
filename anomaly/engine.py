@@ -22,8 +22,11 @@ Each poll cycle, in order:
 """
 
 import argparse
+import copy
 import time
 from datetime import datetime, timezone
+
+import psycopg2
 
 import db
 from detectors import kinematic_inconsistency, went_dark, went_dark_thresholds
@@ -51,6 +54,7 @@ def run(poll_seconds, adsb_silence_s, radar_recency_s,
     # Quiet unless something fires -- so a heartbeat line every
     # HEARTBEAT_S shows it's alive when you're watching its output.
     last_heartbeat = 0.0
+    db_down_since = None
 
     while True:
         try:
@@ -72,10 +76,12 @@ def run(poll_seconds, adsb_silence_s, radar_recency_s,
             open_went_dark = currently_open
 
             events = db.events_since(cursor)
-            if events:
-                cursor = max(e["id"] for e in events)
-            kinem_detected, kinem_resolved, kinematic_state = kinematic_inconsistency(
-                events, kinematic_state, sigma_mult, consecutive
+            # Work on a copy: cursor and streak state only move on once this
+            # cycle's alerts are written, so a database error mid-cycle
+            # re-reads the same events next time instead of losing them.
+            next_state = copy.deepcopy(kinematic_state)
+            kinem_detected, kinem_resolved, next_state = kinematic_inconsistency(
+                events, next_state, sigma_mult, consecutive
             )
             for a in kinem_detected:
                 external_id = tracks_by_id.get(a["track_id"], {}).get("external_id")
@@ -85,6 +91,12 @@ def run(poll_seconds, adsb_silence_s, radar_recency_s,
                 )
             for r in kinem_resolved:
                 db.resolve_episode(r["track_id"], r["kind"], r["resolved_at"])
+            if events:
+                cursor = max(e["id"] for e in events)
+            kinematic_state = next_state
+            if db_down_since is not None:
+                print(f"database back after {time.time() - db_down_since:.0f}s")
+                db_down_since = None
 
             # Only on change -- an open episode used to reprint every poll.
             if new_dark or resolved_dark or kinem_detected or kinem_resolved:
@@ -102,6 +114,14 @@ def run(poll_seconds, adsb_silence_s, radar_recency_s,
                     + (f", {len(open_went_dark)} went-dark still open" if open_went_dark else "")
                 )
                 last_heartbeat = time.time()
+        except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+            # Inserts are idempotent (one open episode per track and kind),
+            # so a cycle cut short is simply redone.
+            if db_down_since is None:
+                db_down_since = time.time()
+                print(f"database unavailable ({str(e).strip().splitlines()[0]}) -- retrying")
+            time.sleep(min(DB_RETRY_MAX_S, max(poll_seconds, time.time() - db_down_since)))
+            continue
         except Exception as e:
             print(f"anomaly tick failed: {e}")
             raise
@@ -114,6 +134,7 @@ def run(poll_seconds, adsb_silence_s, radar_recency_s,
 
 
 HEARTBEAT_S = 60
+DB_RETRY_MAX_S = 10.0
 
 
 def parse_args():

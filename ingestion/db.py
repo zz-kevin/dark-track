@@ -82,11 +82,11 @@ def insert_ticks(rows):
             INSERT INTO raw_ticks
                 (source, external_id, lat, lon, altitude_m, velocity_mps,
                  heading_deg, observed_at, icao24, aircraft_type,
-                 aircraft_variant, truth_tick_id)
+                 aircraft_variant, truth_tick_id, velocity_at)
             VALUES (%(source)s, %(external_id)s, %(lat)s, %(lon)s,
                     %(altitude_m)s, %(velocity_mps)s, %(heading_deg)s,
                     %(observed_at)s, %(icao24)s, %(aircraft_type)s,
-                    %(aircraft_variant)s, %(truth_tick_id)s)
+                    %(aircraft_variant)s, %(truth_tick_id)s, %(velocity_at)s)
             ON CONFLICT DO NOTHING
             """,
             [
@@ -99,6 +99,7 @@ def insert_ticks(rows):
                     "aircraft_type": None,
                     "aircraft_variant": None,
                     "truth_tick_id": None,
+                    "velocity_at": None,
                     **row,
                 }
                 for row in rows
@@ -144,7 +145,7 @@ def ticks_in_window(start, end, source=None, aircraft_types=None):
     query = """
         SELECT id, source, external_id, lat, lon, altitude_m, velocity_mps,
                heading_deg, observed_at, icao24, aircraft_type,
-               aircraft_variant, truth_tick_id
+               aircraft_variant, truth_tick_id, velocity_at
         FROM raw_ticks
         WHERE observed_at BETWEEN %s AND %s
     """
@@ -161,7 +162,7 @@ def ticks_in_window(start, end, source=None, aircraft_types=None):
         cur.execute(query, params)
         cols = ["id", "source", "external_id", "lat", "lon", "altitude_m",
                 "velocity_mps", "heading_deg", "observed_at", "icao24",
-                "aircraft_type", "aircraft_variant", "truth_tick_id"]
+                "aircraft_type", "aircraft_variant", "truth_tick_id", "velocity_at"]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 

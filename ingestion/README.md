@@ -126,6 +126,12 @@ column existed are matched back by `radar_truth.py` (99.2% of NYC and
 100% of Gulf contacts labeled unambiguously; the rest are left unscored).
 Run `python3 db.py` once to add the column to an existing database.
 
+ADS-B rows also carry `velocity_at` (OpenSky's `last_contact`): the
+reported speed/heading come from the aircraft's latest message, usually
+~2.5 s newer than the position fix in `observed_at`. Recorded since
+2026-10-16 04:07 UTC; see docs/FUSION.md for what fusion does (and
+doesn't) do with it.
+
 ## Status
 
 - [x] Week 1 — OpenSky poller proof-of-life
