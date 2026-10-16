@@ -1,7 +1,7 @@
 # Architecture
 
-_Status: sketch — flesh this out in week 1 once the data flow is proven end to
-end. Keep it to one page for as long as possible._
+_Status: data flow proven end to end, from OpenSky to the web UI. Keep the
+diagram to one page; the decisions log below carries the reasoning._
 
 ## Data flow
 
@@ -39,9 +39,12 @@ Synthetic radar gen  ───┘                     ▼
 - **anomaly/** — consumes the fused picture, runs rule-based + statistical
   detectors, exposes a test harness that injects synthetic anomalies into a
   replay run.
-- **api/** — thin layer serving fused tracks + anomaly feed to the frontend.
+- **api/** — thin read-only layer serving fused tracks, track history,
+  the anomaly feed, and replays (fusion + detection re-run in memory over
+  a stored window, optionally with an injected anomaly) to the frontend.
   Not the interesting part of this project — keep it simple.
-- **web/** — map view, replay controls, click-to-inspect track history.
+- **web/** — Leaflet map: live picture, replay player with an alert
+  timeline, click-to-inspect track history.
 
 ## Decisions log
 
@@ -139,6 +142,84 @@ Record real decisions here as they're made, in the format:
 > aren't tracked either (no ADS-B, AIS usually dark), so they're
 > reference data only. Both would need a different sensor model, not more
 > matching rules.
+
+> **Decision:** Went-dark is scored against a cadence-scaled target
+> (silence threshold + one ADS-B interval), false positives as the share
+> of aircraft alarming on *un-injected* traffic, and only on airborne
+> aircraft; final numbers come from windows captured after the
+> thresholds were frozen.
+> **Alternatives considered:** keep the original 15s target; keep the
+> n*(n-1) false-positive metric; quote the tuning-window numbers.
+> **Why:** 15s is unreachable with a 30s silence threshold (forced by
+> OpenSky poll jitter); the old FP metric re-counted the same alerts once
+> per run; all 27 NYC false alarms were taxiing traffic. Held-out recall
+> came in 3-8 points below the tuning window (anomaly/README.md) -- the
+> number to quote.
+
+> **Decision:** Ground truth for synthetic radar contacts lives in
+> `raw_ticks.truth_tick_id` (written by radar_sim, never read by
+> fusion), with `ingestion/radar_truth.py` inferring it for older
+> contacts.
+> **Alternatives considered:** score fusion only through ADS-B
+> callsigns; a separate truth table.
+> **Why:** fusion accuracy can't be measured without knowing which
+> aircraft each anonymous contact came from, and injected maneuvers have
+> to move the target's radar too. Inference (latency window + identical
+> altitude + speed/heading jitter + position) labels 99.2% of NYC and
+> 100% of Gulf contacts unambiguously; the rest are left unscored rather
+> than guessed. Same table, nullable column: nothing to join or keep in
+> sync.
+
+> **Decision:** Fusion polls Postgres every 0.25s and writes each cycle
+> in one transaction.
+> **Alternatives considered:** LISTEN/NOTIFY from the producers; keep
+> the 3s poll.
+> **Why:** the 500 ms tick -> fused-output target is mostly poll wait:
+> at 3s, 27% of ticks could make it regardless of compute. Two indexed
+> SELECTs every 0.25s are cheap and need no producer changes;
+> LISTEN/NOTIFY would cut the wait further but touches every writer.
+> One connection per touched track was the other half (p95 759 ms per
+> cycle on its own). Measured after: 100% of ticks under 500 ms at ~520
+> concurrent tracks (fusion/bench.py).
+
+> **Decision:** One region per fusion run (`--region`); replay tools
+> refuse a mixed-region window.
+> **Alternatives considered:** a proper map projection, or per-track
+> local frames, so one process can fuse anywhere.
+> **Why:** a single flat-earth plane is fine at regional scale and keeps
+> the filter math trivial. Two pollers once ran at the same time
+> (2026-10-10 ~02:30-03:10 UTC), and a window from then fused as one
+> puts the reference point between New York and Qatar -- roughly a 10%
+> east-west distance error in each region. Filtering by region is a few
+> lines; a global projection would be a rewrite for a case that only
+> comes up when two regions are captured at once.
+
+> **Decision:** Association cost is the negative log-likelihood under
+> each track's predicted covariance (Mahalanobis^2 + log det S), and the
+> staleness gate is 2.5 ADS-B intervals (was Euclidean distance, 2x).
+> **Alternatives considered:** keep Euclidean cost; gate for the track's
+> whole TTL; feed ADS-B velocity into the filter to shrink the 45s
+> prediction error instead.
+> **Why:** tracing held-out went-dark misses found two mechanisms --
+> a confident neighbour beating the dark track's uncertain prediction on
+> distance, and one dropped radar contact pushing the next one past the
+> 2x gate. Developed on the Oct 14 window; frozen, then scored on two
+> Gulf windows nothing had touched (89.9% / 94.2% recall, 0.0% / 1.4%
+> false alarms) and a fresh NYC capture (91.1%, 0.0%). Gating for the whole TTL
+> recovered more Gulf recall (96.9%) but took NYC false alarms 0% -> 4%,
+> so it stopped at 2.5x. The velocity measurement is still worth doing,
+> but it changes the filter, not just association, and needs its own
+> evaluation.
+
+> **Decision:** `api/` is a stdlib `http.server`, read-only, serving
+> `web/` from the same origin; replays re-run fusion + detection in
+> memory per request (cached).
+> **Alternatives considered:** FastAPI/Flask; precomputing replays into
+> tables.
+> **Why:** the API is deliberately not the interesting part -- no new
+> dependency, no CORS. Re-running a 15-minute window takes ~1s, and
+> it means a replay always reflects current fusion code and can inject
+> the same anomalies the harness scores, which a stored replay couldn't.
 
 This doc is what gets read in an interview — keep it honest, including the
 tradeoffs that were made for time rather than "the right" reason.

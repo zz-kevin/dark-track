@@ -67,7 +67,7 @@ def inject_went_dark(ticks, external_id, cutoff_fraction=0.5):
 
 
 def inject_kinematic_jump(ticks, external_id, cutoff_fraction=0.5,
-                           lateral_accel_mps2=20.0, seed=None):
+                           lateral_accel_mps2=20.0, seed=None, radar_sources=None):
     """Simulates a sustained maneuver the constant-velocity model can't
     explain: after a cutoff timestamp, `external_id`'s ADS-B positions are
     displaced by 0.5 * a * t^2 along a random bearing -- a constant
@@ -81,6 +81,13 @@ def inject_kinematic_jump(ticks, external_id, cutoff_fraction=0.5,
     couple of updates -- measured: zero alerts on the target.) Sustained
     rather than a one-tick jump, so the residual streak spans the
     consecutive updates kinematic_inconsistency() requires.
+
+    `radar_sources` ({radar tick id: source adsb tick}, from
+    ingestion/radar_truth.label) moves the target's radar contacts by the
+    same maneuver, evaluated at each contact's own time -- a real maneuver
+    moves the aircraft, so both sensors see it. Without it only ADS-B
+    moves, the target's track loses its radar, and the orphaned contacts
+    start new tracks (the old harness's "induced" false alarms).
 
     Returns (modified_ticks, ground_truth) where ground_truth is
     {"external_id", "kind": "kinematic_inconsistency", "injected_at"}.
@@ -109,10 +116,16 @@ def inject_kinematic_jump(ticks, external_id, cutoff_fraction=0.5,
     bearing = rng.uniform(0, 2 * math.pi)
     north_dir, east_dir = math.cos(bearing), math.sin(bearing)
     after_ids = {t["id"] for t in after}
+    target_ids = {t["id"] for t in adsb_ticks}
+    radar_ids = {
+        rid for rid, src in (radar_sources or {}).items() if src["id"] in target_ids
+    }
 
     modified = []
     for t in ticks:
-        if t["id"] in after_ids:
+        moves = (t["id"] in after_ids if t["source"] == "adsb"
+                 else t["id"] in radar_ids and t["observed_at"] > cutoff_at)
+        if moves:
             elapsed = (t["observed_at"] - cutoff_at).total_seconds()
             offset_m = 0.5 * lateral_accel_mps2 * elapsed ** 2
             new_lat, new_lon = _offset_latlon(

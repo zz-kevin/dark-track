@@ -5,8 +5,8 @@ Both are plain functions over dicts, not DB queries, so the exact same code
 runs live (anomaly/engine.py, reading real fused_tracks/fused_track_events)
 and under test (anomaly/harness.py, feeding fusion/engine.py's in-memory
 output directly, no DB involved). See docs/PROBLEM.md "Anomaly detection"
-for the 15s-detection / <5%-false-positive-rate success criteria these are
-tuned against, and anomaly/README.md for the measured numbers.
+for the detection-latency / <5%-false-positive-rate success criteria these
+are tuned against, and anomaly/README.md for the measured numbers.
 """
 
 

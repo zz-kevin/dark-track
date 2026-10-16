@@ -76,6 +76,9 @@ def make_radar_row(adsb_row, noise_std_m, latency_min, latency_max, rng):
         "velocity_mps": velocity + rng.gauss(0, 2.0) if velocity is not None else None,
         "heading_deg": heading + rng.gauss(0, 3.0) if heading is not None else None,
         "observed_at": adsb_row["observed_at"] + timedelta(seconds=latency),
+        # Ground truth for scoring only (see ingestion/radar_truth.py);
+        # fusion never reads it.
+        "truth_tick_id": adsb_row["id"],
     }
 
 

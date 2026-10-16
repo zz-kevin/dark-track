@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import psycopg2
+from psycopg2.extras import execute_values
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql:///dark_track")
 SCHEMA_PATH = Path(__file__).parent / "schema.sql"
@@ -40,21 +41,41 @@ def init_schema():
         cur.execute(SCHEMA_PATH.read_text())
 
 
-def recent_center(source="adsb", n=500):
+def _bbox_sql(bbox):
+    """(sql, params) restricting raw_ticks to a (lamin, lamax, lomin, lomax)
+    box, or nothing for bbox=None."""
+    if bbox is None:
+        return "", ()
+    lamin, lamax, lomin, lomax = bbox
+    return " AND lat BETWEEN %s AND %s AND lon BETWEEN %s AND %s", (lamin, lamax, lomin, lomax)
+
+
+def recent_center(source="adsb", n=500, bbox=None):
     """Mean lat/lon of the latest n ticks, or None if there are none --
     used as geo.py's flat-earth reference point."""
+    where, params = _bbox_sql(bbox)
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT AVG(lat), AVG(lon) FROM (
-                SELECT lat, lon FROM raw_ticks WHERE source = %s
+                SELECT lat, lon FROM raw_ticks WHERE source = %s{where}
                 ORDER BY id DESC LIMIT %s
             ) recent
             """,
-            (source, n),
+            (source, *params, n),
         )
         lat, lon = cur.fetchone()
         return None if lat is None else (lat, lon)
+
+
+def recent_points(source="adsb", n=500):
+    """(lat, lon) of the latest n ticks -- to check which regions are live."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT lat, lon FROM raw_ticks WHERE source = %s ORDER BY id DESC LIMIT %s",
+            (source, n),
+        )
+        return cur.fetchall()
 
 
 def next_track_id():
@@ -92,17 +113,18 @@ def latest_raw_id(source):
         return cur.fetchone()[0]
 
 
-def raw_ticks_since(source, since_id):
+def raw_ticks_since(source, since_id, bbox=None):
+    where, params = _bbox_sql(bbox)
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT id, external_id, lat, lon, observed_at, aircraft_type,
                    aircraft_variant, velocity_mps, heading_deg, altitude_m
             FROM raw_ticks
-            WHERE source = %s AND id > %s
+            WHERE source = %s AND id > %s{where}
             ORDER BY id
             """,
-            (source, since_id),
+            (source, since_id, *params),
         )
         cols = ["id", "external_id", "lat", "lon", "observed_at",
                 "aircraft_type", "aircraft_variant", "velocity_mps",
@@ -110,61 +132,36 @@ def raw_ticks_since(source, since_id):
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
-def upsert_fused_track(track):
+TRACK_COLS = ["track_id", "external_id", "lat", "lon", "speed_mps", "heading_deg",
+              "confidence", "adsb_hits", "radar_hits", "last_adsb_at",
+              "last_radar_at", "created_at", "updated_at", "aircraft_type",
+              "aircraft_variant", "last_adsb_alt_m"]
+EVENT_COLS = ["track_id", "source", "raw_tick_id", "observed_at", "residual_m",
+              "innovation_std_m", "created_new_track"]
+
+
+def write_cycle(events, track_rows, retired_ids):
+    """Everything one fusion cycle produces, in one transaction: append
+    the event log, upsert touched tracks, delete retired ones."""
     with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO fused_tracks
-                (track_id, external_id, lat, lon, speed_mps, heading_deg,
-                 confidence, adsb_hits, radar_hits, last_adsb_at,
-                 last_radar_at, created_at, updated_at, aircraft_type,
-                 aircraft_variant, last_adsb_alt_m)
-            VALUES
-                (%(track_id)s, %(external_id)s, %(lat)s, %(lon)s,
-                 %(speed_mps)s, %(heading_deg)s, %(confidence)s,
-                 %(adsb_hits)s, %(radar_hits)s, %(last_adsb_at)s,
-                 %(last_radar_at)s, %(created_at)s, %(updated_at)s,
-                 %(aircraft_type)s, %(aircraft_variant)s, %(last_adsb_alt_m)s)
-            ON CONFLICT (track_id) DO UPDATE SET
-                external_id = EXCLUDED.external_id,
-                lat = EXCLUDED.lat,
-                lon = EXCLUDED.lon,
-                speed_mps = EXCLUDED.speed_mps,
-                heading_deg = EXCLUDED.heading_deg,
-                confidence = EXCLUDED.confidence,
-                adsb_hits = EXCLUDED.adsb_hits,
-                radar_hits = EXCLUDED.radar_hits,
-                last_adsb_at = EXCLUDED.last_adsb_at,
-                last_radar_at = EXCLUDED.last_radar_at,
-                updated_at = EXCLUDED.updated_at,
-                aircraft_type = EXCLUDED.aircraft_type,
-                aircraft_variant = EXCLUDED.aircraft_variant,
-                last_adsb_alt_m = EXCLUDED.last_adsb_alt_m
-            """,
-            track,
-        )
-
-
-def delete_fused_track(track_id):
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute("DELETE FROM fused_tracks WHERE track_id = %s", (track_id,))
-
-
-def insert_fused_events(events):
-    if not events:
-        return
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.executemany(
-            """
-            INSERT INTO fused_track_events
-                (track_id, source, raw_tick_id, observed_at, residual_m,
-                 innovation_std_m, created_new_track)
-            VALUES (%(track_id)s, %(source)s, %(raw_tick_id)s,
-                    %(observed_at)s, %(residual_m)s, %(innovation_std_m)s,
-                    %(created_new_track)s)
-            """,
-            events,
-        )
+        if events:
+            execute_values(
+                cur,
+                f"INSERT INTO fused_track_events ({', '.join(EVENT_COLS)}) VALUES %s",
+                [tuple(e[c] for c in EVENT_COLS) for e in events],
+            )
+        if track_rows:
+            updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in TRACK_COLS
+                                if c not in ("track_id", "created_at"))
+            execute_values(
+                cur,
+                f"INSERT INTO fused_tracks ({', '.join(TRACK_COLS)}) VALUES %s "
+                f"ON CONFLICT (track_id) DO UPDATE SET {updates}",
+                [tuple(r[c] for c in TRACK_COLS) for r in track_rows],
+            )
+        if retired_ids:
+            cur.execute("DELETE FROM fused_tracks WHERE track_id = ANY(%s)",
+                        (list(retired_ids),))
 
 
 def adsb_update_interval(window_min=15):

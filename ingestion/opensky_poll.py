@@ -47,6 +47,7 @@ except ImportError as e:
 
 import db
 from aircraft_types import Classifier, label
+from regions import REGIONS
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 # Picked up automatically when --aircraft-db isn't given.
@@ -54,16 +55,7 @@ DEFAULT_AIRCRAFT_DB = REPO_ROOT / "data" / "raw" / "aircraft-database.csv"
 # OpenSky API client credentials, as downloaded from the account page.
 CREDENTIALS_FILE = REPO_ROOT / "opensky-credentials.json"
 
-# ---- Bounding box presets (--region), or pass --bbox ----
-# Each is (lamin, lamax, lomin, lomax): south, north, west, east. To add
-# your own: open Google Maps, right-click the SW corner of the area you
-# want and copy the lat/lon, then do the same for the NE corner.
-REGIONS = {
-    "nyc": (40.40, 41.10, -74.60, -73.30),   # New York City metro
-    # Persian Gulf + Strait of Hormuz -- where most of the watched types
-    # operate. Larger box, so it costs more OpenSky API credits per poll.
-    "gulf": (23.00, 30.50, 47.50, 57.50),
-}
+# ---- Bounding box presets (--region, see regions.py), or pass --bbox ----
 
 POLL_SECONDS = 10
 OPENSKY_TOKEN_URL = (

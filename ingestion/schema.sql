@@ -51,3 +51,10 @@ CREATE INDEX IF NOT EXISTS raw_ticks_aircraft_type_idx
 CREATE UNIQUE INDEX IF NOT EXISTS raw_ticks_adsb_dedup_idx
     ON raw_ticks (icao24, observed_at)
     WHERE source = 'adsb' AND icao24 IS NOT NULL;
+
+-- Radar contacts only: the adsb row radar_sim.py derived this contact from.
+-- Simulation ground truth for scoring (fusion/accuracy.py, anomaly/inject.py
+-- via radar_truth.py) -- fusion/ never reads it, or the radar would no
+-- longer be anonymous. NULL on contacts written before it was recorded;
+-- radar_truth.py infers those.
+ALTER TABLE raw_ticks ADD COLUMN IF NOT EXISTS truth_tick_id BIGINT;

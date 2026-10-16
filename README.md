@@ -6,7 +6,7 @@ picture, with anomaly detection for aircraft that behave like they're trying
 not to be seen (transponder drops while the radar-like contact keeps flying
 the same profile).
 
-Solo capstone project. Status: **week 1 — scaffolding.**
+Solo capstone project. Status: **weeks 12–13 — visualization & demo UI done; next is hardening.**
 
 ## Why two sources
 
@@ -32,10 +32,22 @@ success criteria.
 - [x] Week 1 — foundations (this scaffold, live data proof, design doc)
 - [x] Weeks 2–4 — ingestion pipeline
 - [x] Weeks 5–9 — fusion & entity resolution
-- [ ] Weeks 10–11 — anomaly detection
-- [ ] Weeks 12–13 — visualization & demo UI
-- [ ] Weeks 14–15 — hardening, benchmarks, writeup
+- [x] Weeks 10–11 — anomaly detection (validation scores in [`anomaly/README.md`](anomaly/README.md))
+- [x] Weeks 12–13 — visualization & demo UI
+- [ ] Weeks 14–15 — hardening, benchmarks, writeup (benchmarks done: see below)
 - [ ] Week 16 — buffer & presentation
+
+Against the success criteria in [`docs/PROBLEM.md`](docs/PROBLEM.md):
+
+| Criterion | Target | Measured |
+|---|---|---|
+| Fusion accuracy | 90% of aircraft | Gulf 95.1–97.5%; NYC 87.8% (97.4% airborne) |
+| Went-dark false alarms | < 5%, held-out | 0.0–1.4% |
+| Went-dark detection | within silence + 1 interval | 89.9–94.2% of injected events |
+| Throughput | 150 tracks, < 500 ms | 100% under 500 ms at ~510 tracks |
+
+All measured on validation windows nothing was tuned on (two Gulf, one
+fresh NYC capture).
 
 ## Running it
 
@@ -52,11 +64,32 @@ python3 ingestion/radar_sim.py           # synthetic radar feed, derived from th
 
 python3 fusion/db.py                     # creates fused_tracks / fused_track_events
 python3 fusion/engine.py                 # Kalman filter + gating + association -> fused picture
+python3 anomaly/db.py                    # creates anomaly_events
+python3 anomaly/engine.py                # went-dark + kinematic detectors -> alerts
+
+python3 api/server.py                    # web UI at http://localhost:8000 (live + replay)
 ```
 
-See [`ingestion/README.md`](ingestion/README.md) and
-[`fusion/README.md`](fusion/README.md) for the full set of scripts and
-tuning flags.
+Or `./run.sh <poll|radar|fusion|anomaly|api>` from anywhere, one per
+terminal; `./run.sh status` shows what's running. If two pollers run at
+once (e.g. NYC and Gulf), run one fusion engine per region with
+`--region`.
+
+The UI works without the live pipeline: **Replay** re-runs fusion and
+anomaly detection over any stored 15-minute window, and can inject a
+went-dark or a 2g maneuver on a chosen aircraft first, which is the
+quickest demo.
+
+Evaluating it (all replay a stored window; add `--region` if both pollers
+ran during it):
+
+```
+./run.sh harness sweep went_dark <start> <end>   # anomaly precision/recall
+./run.sh accuracy <start> <end>                  # fusion association accuracy
+./run.sh bench <start> <end> --copies 4          # throughput / latency
+```
+
+See each module's README for the full set of scripts and tuning flags.
 
 ## License
 

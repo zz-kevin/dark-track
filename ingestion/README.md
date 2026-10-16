@@ -116,9 +116,19 @@ after it starts (or pass `--since-id` to backfill from a specific row).
 | `aircraft_types.py` | Watched military aircraft list + icao24 -> type classifier |
 | `radar_sim.py` | Synthetic radar source — noise, latency, dropout, no ID, derived from stored adsb ticks |
 | `replay.py` | Re-emits a stored time window, interleaved by `observed_at` |
+| `regions.py` | The `--region` bounding boxes; splits a stored window back out by region |
+| `radar_truth.py` | Evaluation only: which ADS-B tick (so which aircraft) each radar contact came from |
+
+Radar contacts carry `truth_tick_id`, the ADS-B row they were derived
+from -- simulation ground truth for scoring (`fusion/accuracy.py`,
+`anomaly/inject.py`). Fusion never reads it. Contacts written before the
+column existed are matched back by `radar_truth.py` (99.2% of NYC and
+100% of Gulf contacts labeled unambiguously; the rest are left unscored).
+Run `python3 db.py` once to add the column to an existing database.
 
 ## Status
 
 - [x] Week 1 — OpenSky poller proof-of-life
 - [x] Weeks 2–4 — shared schema, radar simulator, replay
-- [ ] Next: validate fusion accuracy assumptions against real dropout/noise rates before tuning `fusion/`'s gating window
+- [x] Ground truth for radar contacts (`truth_tick_id`, `radar_truth.py`), used to measure fusion accuracy
+- [x] Fresh NYC validation capture, 2026-10-15 22:50-23:20 UTC (radar with exact `truth_tick_id`)
