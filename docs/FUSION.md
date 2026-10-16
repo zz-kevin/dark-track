@@ -178,6 +178,7 @@ an aircraft passes at >= 90% correct contacts.
 
 | Window | Role | Aircraft passing | Airborne only | Contacts correct | Fused error p50 / p95 |
 |---|---|---|---|---|---|
+| NYC 2026-10-16 18:08-18:23 UTC | validation | **82.8%** (154/186) | 100.0% | 93.6% | 24 / 63 m |
 | Gulf 2026-10-12 04:00-04:15 UTC | validation | **100.0%** (122/122) | 100.0% | 99.9% | 23 / 56 m |
 | Gulf 2026-10-13 02:00-02:15 UTC | validation | **99.2%** (129/130) | 99.2% | 99.9% | 23 / 56 m |
 | Gulf 2026-10-14 04:30-04:45 UTC | validation | **96.7%** (117/121) | 96.7% | 98.9% | 24 / 58 m |
@@ -196,12 +197,13 @@ an aircraft passes at >= 90% correct contacts.
 | Gulf 2026-10-13 05:30-05:45 UTC | development | **98.1%** (156/159) | 98.7% | 99.6% | 23 / 59 m |
 | Gulf 2026-10-14 06:15-06:30 UTC | development | **99.3%** (151/152) | 100.0% | 99.7% | 24 / 60 m |
 | Gulf 2026-10-10 02:01-02:16 UTC | development | **99.3%** (146/147) | 99.3% | 99.8% | 24 / 53 m |
+| NYC 2026-10-16 17:52-18:07 UTC | development | **77.0%** (147/191) | 99.4% | 93.1% | 24 / 56 m |
 | NYC 2026-10-10 02:38-03:08 UTC | development | **84.1%** (127/151) | 92.4% | 95.0% | 27 / 141 m |
 
 Roles as in anomaly/README.md. Gulf clears the 90% target everywhere
 (91.7-100%; 96.7-100% on the validation windows; the Gulf morning
-capture is the low end). NYC airborne does too (92.4-98.5%); NYC all-traffic
-doesn't (81.2-89.8%), because of ground traffic -- the 2026-10-16
+capture is the low end). NYC airborne does too (92.4-100%; 100% on the daytime validation
+window); NYC all-traffic doesn't (77.0-89.8%), because of ground traffic -- the 2026-10-16
 capture, at night, has proportionally more of it.
 
 Earlier round: the likelihood cost (vs. Euclidean, same everything else) took the
@@ -326,8 +328,11 @@ pairs (A04/A05).
   (`engine.VEL_TIME_OFFSET`). On the first window with the column
   (Gulf 2026-10-16 04:10) it made things slightly worse -- accuracy
   93.1% -> 90.8%, kinematic recall 78.4% -> 73.2%, went-dark +1 point --
-  so it's off. It was aimed at NYC approach turns; it needs an NYC
-  capture with `velocity_at` to judge there.
+  so it's off. It was aimed at NYC approach turns, so it was then
+  tested on a daytime NYC capture with `velocity_at` (2026-10-16
+  17:52-18:07): identical on every metric, because there's almost no
+  offset to correct at NYC -- median 0 s, p90 1 s, p99 5 s between
+  position fix and velocity (dense receiver coverage). Closed: off.
 - **Ground traffic is a sensor limit.** Of the NYC ground radar
   contacts that landed on another aircraft's track, 93% (158/169) were
   *more likely* under that aircraft's predicted position than under
