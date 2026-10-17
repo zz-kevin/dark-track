@@ -61,6 +61,37 @@ def went_dark(tracks, now, adsb_silence_s=30.0, radar_recency_s=10.0):
     return out
 
 
+def went_dark_episodes(tracks, now, open_episodes, adsb_silence_s=30.0, radar_recency_s=10.0):
+    """went_dark() with episode state, so one dropout is one alert.
+
+    An episode opens when went_dark() first flags a track and stays open
+    until ADS-B actually comes back (the track's last_adsb_at moves past
+    where it was when the episode opened) or the track is retired --
+    *not* whenever went_dark() momentarily stops flagging it. At 45 s
+    cadence with 10% radar dropout, a radar gap past radar_recency_s is
+    routine, and closing on it re-alerted the same dark aircraft every
+    few minutes (YETI45, Gulf 2026-10-14 03:37: alerts at +54 s, +195 s
+    and +303 s for one dropout).
+
+    `open_episodes`: {track_id: last_adsb_at when the episode opened};
+    updated in place and returned. Returns (new hits, resolved track
+    ids, open_episodes)."""
+    by_id = {t["track_id"]: t for t in tracks}
+    new = [h for h in went_dark(tracks, now, adsb_silence_s, radar_recency_s)
+           if h["track_id"] not in open_episodes]
+    for h in new:
+        open_episodes[h["track_id"]] = by_id[h["track_id"]]["last_adsb_at"]
+    resolved = [
+        tid for tid, adsb_at in open_episodes.items()
+        if tid not in by_id
+        or (by_id[tid]["last_adsb_at"] is not None
+            and (adsb_at is None or by_id[tid]["last_adsb_at"] > adsb_at))
+    ]
+    for tid in resolved:
+        del open_episodes[tid]
+    return new, resolved, open_episodes
+
+
 # Below this (or no altitude at all) a track's last ADS-B fix counts as
 # on the ground / on final, and went_dark() ignores it.
 MIN_AIRBORNE_ALT_M = 100.0
@@ -103,31 +134,44 @@ def kinematic_inconsistency(events, state, sigma_mult=4.0, consecutive=2):
 
     `events`: fused_track_events rows in id/time order -- id, track_id,
     source, observed_at, residual_m, innovation_std_m.
-    `state`: {(track_id, source): {"count": int, "open": bool}}, mutated in
-    place and also returned -- caller keeps this across polls (in memory,
+    `state`: {"streaks": {(track_id, source): int}, "open": {track_id:
+    normal updates since}}, mutated in place and also returned (start
+    with {}) -- caller keeps this across polls (in memory,
     same pattern as fusion/engine.py's own `tracks` dict) so a streak isn't
     lost between poll cycles. Lost on process restart -- see
     anomaly/README.md known limitations.
 
-    Edge-triggered both ways: emits a `detected` entry the moment a streak
-    *reaches* `consecutive` (not on every tick after), and a `resolved`
-    entry the moment a tick with normal residual breaks an open streak.
+    Edge-triggered both ways, one episode per track: emits `detected` the
+    moment any source's streak *reaches* `consecutive` while the track has
+    no open episode, and `resolved` once the track has had `consecutive`
+    normal updates in a row.
 
     Returns (detected, resolved, state).
     """
+    # Streaks are counted per (track, source) -- ADS-B and radar residuals
+    # aren't comparable -- but the *episode* is per track, and closes only
+    # after `consecutive` normal updates in a row (any source), the same
+    # bar it took to open. Per-(track, source) episodes that closed on one
+    # normal update re-alerted the same aircraft throughout a maneuver:
+    # on NYC 2026-10-10, all 98 "induced" kinematic alerts in 40 injected
+    # runs were the injected target itself.
+    streaks = state.setdefault("streaks", {})
+    open_tracks = state.setdefault("open", {})  # track_id -> normal updates since
     detected = []
     resolved = []
     for e in events:
-        key = (e["track_id"], e["source"])
-        s = state.setdefault(key, {"count": 0, "open": False})
+        tid = e["track_id"]
+        key = (tid, e["source"])
         normalized = e["residual_m"] / e["innovation_std_m"]
 
         if normalized > sigma_mult:
-            s["count"] += 1
-            if s["count"] >= consecutive and not s["open"]:
-                s["open"] = True
+            streaks[key] = streaks.get(key, 0) + 1
+            if tid in open_tracks:
+                open_tracks[tid] = 0
+            elif streaks[key] >= consecutive:
+                open_tracks[tid] = 0
                 detected.append({
-                    "track_id": e["track_id"],
+                    "track_id": tid,
                     "external_id": None,
                     "kind": "kinematic_inconsistency",
                     "detected_at": e["observed_at"],
@@ -135,12 +179,14 @@ def kinematic_inconsistency(events, state, sigma_mult=4.0, consecutive=2):
                     "source": e["source"],
                 })
         else:
-            if s["open"]:
-                resolved.append({
-                    "track_id": e["track_id"],
-                    "kind": "kinematic_inconsistency",
-                    "resolved_at": e["observed_at"],
-                })
-            s["count"] = 0
-            s["open"] = False
+            streaks[key] = 0
+            if tid in open_tracks:
+                open_tracks[tid] += 1
+                if open_tracks[tid] >= consecutive:
+                    del open_tracks[tid]
+                    resolved.append({
+                        "track_id": tid,
+                        "kind": "kinematic_inconsistency",
+                        "resolved_at": e["observed_at"],
+                    })
     return detected, resolved, state

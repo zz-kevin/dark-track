@@ -66,7 +66,7 @@ regions = _load_module("regions", INGESTION_DIR / "regions.py")
 
 import inject  # noqa: E402
 from detectors import (  # noqa: E402
-    MIN_AIRBORNE_ALT_M, kinematic_inconsistency, went_dark, went_dark_thresholds,
+    MIN_AIRBORNE_ALT_M, kinematic_inconsistency, went_dark_episodes, went_dark_thresholds,
 )
 
 DEFAULTS = dict(
@@ -90,7 +90,7 @@ def run_scenario(ticks, params):
     detectors over `ticks` in simulated poll cycles. Returns a list of
     detected anomaly dicts: {kind, track_id, external_id, detected_at}."""
     kinematic_state = {}
-    open_went_dark = set()
+    open_went_dark = {}
     detections = []
 
     for cycle in simulate.run(ticks, params):
@@ -101,14 +101,10 @@ def run_scenario(ticks, params):
              "last_adsb_alt_m": t.last_adsb_alt_m}
             for t in tracks.values()
         ]
-        dark_hits = went_dark(
-            snapshot, poll_time, params["adsb_silence_s"], params["radar_recency_s"]
+        new_dark, _, open_went_dark = went_dark_episodes(
+            snapshot, poll_time, open_went_dark, params["adsb_silence_s"], params["radar_recency_s"]
         )
-        currently_open = {h["track_id"] for h in dark_hits}
-        for h in dark_hits:
-            if h["track_id"] not in open_went_dark:
-                detections.append(h)
-        open_went_dark = currently_open
+        detections.extend(new_dark)
 
         kinem_detected, _kinem_resolved, kinematic_state = kinematic_inconsistency(
             cycle["events"], kinematic_state, params["sigma_mult"], params["consecutive"]
@@ -343,7 +339,10 @@ def main():
                 seed=zlib.crc32(args.external_id.encode()))
         detections = run_scenario(modified, params)
         tp, fps = score(detections, gt, budget)
-        print(f"ground truth: {gt}")
+        # UTC, like every other time this project prints (Postgres hands
+        # timestamps back in the session's local zone).
+        print(f"ground truth: {gt['kind']} on {gt['external_id']} at "
+              f"{gt['injected_at'].astimezone(timezone.utc):%Y-%m-%d %H:%M:%S} UTC")
         print(f"true positive: {tp}")
         print(f"false positives ({len(fps)}): {fps}")
 

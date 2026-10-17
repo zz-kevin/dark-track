@@ -102,6 +102,14 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(WEB_DIR), **kwargs)
 
+    def end_headers(self):
+        # Static files (web/): revalidate on every load, so a changed app.js
+        # is picked up without a hard refresh -- browsers otherwise cache it
+        # heuristically from Last-Modified. Cheap: it's a local server.
+        if not self.path.startswith("/api/"):
+            self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
     def do_GET(self):
         url = urlparse(self.path)
         if not url.path.startswith("/api/"):

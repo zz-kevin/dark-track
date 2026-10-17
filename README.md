@@ -25,7 +25,7 @@ success criteria.
 | `anomaly/` | Rule-based + statistical detectors, test harness for injected anomalies |
 | `api/` | Serves the fused picture and anomaly feed to the frontend |
 | `web/` | Map-based visualization and replay UI |
-| `docs/` | Problem statement, architecture, and design-decision writeups |
+| `docs/` | Problem statement, architecture, design-decision writeups, and a 10-minute demo script (`DEMO.md`) |
 | `tests/` | Unit + end-to-end tests on synthetic traffic, no database needed (`./run.sh test`; CI runs them on every push) |
 
 ## Status

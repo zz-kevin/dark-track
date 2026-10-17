@@ -10,11 +10,11 @@ fusion/engine.py.
 
 Each poll cycle, in order:
 
-  1. Fetch the current fused picture and run went_dark() against it. Diff
-     the resulting flagged-track-id set against what was open last cycle:
+  1. Fetch the current fused picture and run went_dark_episodes() on it:
      newly flagged -> insert (skipped if the DB already has it open, so a
-     restart doesn't double-insert); no-longer-flagged (ADS-B resumed, or
-     the track was retired out of fused_tracks entirely) -> resolve.
+     restart doesn't double-insert); an open episode resolves only when
+     ADS-B resumes or the track is retired -- not on a momentary radar
+     gap, which used to re-alert the same aircraft.
   2. Fetch fused_track_events since the last cursor and run
      kinematic_inconsistency() against them, which is itself
      edge-triggered (see detectors.py) and returns both new detections and
@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 import psycopg2
 
 import db
-from detectors import kinematic_inconsistency, went_dark, went_dark_thresholds
+from detectors import kinematic_inconsistency, went_dark_episodes, went_dark_thresholds
 
 
 def run(poll_seconds, adsb_silence_s, radar_recency_s,
@@ -42,7 +42,10 @@ def run(poll_seconds, adsb_silence_s, radar_recency_s,
           f"{f'{interval:.0f}s (measured)' if interval else 'unknown, assuming 10s'}")
     cursor = since_id_events if since_id_events is not None else db.latest_event_id()
     kinematic_state = {}
-    open_went_dark = db.open_track_ids("went_dark")
+    # Episodes left open by a previous run, keyed to the track's current
+    # last ADS-B time: they resolve once ADS-B moves on from there.
+    current = {t["track_id"]: t["last_adsb_at"] for t in db.fetch_tracks()}
+    open_went_dark = {tid: current.get(tid) for tid in db.open_track_ids("went_dark")}
 
     print(
         f"Watching fused picture for went-dark (silence>{adsb_silence_s:.0f}s, "
@@ -65,15 +68,15 @@ def run(poll_seconds, adsb_silence_s, radar_recency_s,
                 default=datetime.now(timezone.utc),
             )
 
-            dark_hits = went_dark(tracks, now, adsb_silence_s, radar_recency_s)
-            currently_open = {h["track_id"] for h in dark_hits}
-            new_dark = [h for h in dark_hits if h["track_id"] not in open_went_dark]
+            # Work on a copy so a database error mid-cycle redoes the cycle.
+            next_open = dict(open_went_dark)
+            new_dark, resolved_dark, next_open = went_dark_episodes(
+                tracks, now, next_open, adsb_silence_s, radar_recency_s)
             for h in new_dark:
                 db.insert_anomaly_event(**h)
-            resolved_dark = open_went_dark - currently_open
             for tid in resolved_dark:
                 db.resolve_episode(tid, "went_dark", now)
-            open_went_dark = currently_open
+            open_went_dark = next_open
 
             events = db.events_since(cursor)
             # Work on a copy: cursor and streak state only move on once this

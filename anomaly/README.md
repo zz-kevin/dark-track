@@ -61,27 +61,27 @@ validation windows it gave 92.9-95.5% where this gives 95.5-97.1%).
 
 | Window | Role | Interval | Recall | Mean latency | False-positive rate | Induced / run | Coverage gaps skipped |
 |---|---|---|---|---|---|---|---|
-| NYC 2026-10-16 18:08-18:23 UTC | validation | 11s | **98.3%** (119/121) | 27.1s | **0.0%** (0/165) | 1.44 | 2 |
-| Gulf 2026-10-12 04:00-04:15 UTC | validation | 45s | **98.1%** (106/108) | 49.8s | **0.0%** (0/111) | 0.67 | 2 |
-| Gulf 2026-10-13 02:00-02:15 UTC | validation | 46s | **94.2%** (98/104) | 51.4s | **0.0%** (0/106) | 0.63 | 0 |
-| Gulf 2026-10-14 04:30-04:45 UTC | validation | 46s | **96.9%** (94/97) | 52.9s | **0.0%** (0/102) | 0.60 | 4 |
-| Gulf 2026-10-11 23:30-23:45 UTC | validation, earlier | 46s | **95.5%** (105/110) | 46.4s | **0.0%** (0/113) | 0.88 | 3 |
-| Gulf 2026-10-13 07:00-07:15 UTC | validation, earlier | 45s | **97.1%** (100/103) | 47.7s | **0.0%** (0/107) | 0.55 | 3 |
-| Gulf 2026-10-14 08:00-08:15 UTC | validation, earlier | 46s | **95.5%** (105/110) | 50.6s | **0.0%** (0/111) | 0.75 | 1 |
-| Gulf 2026-10-16 04:30-04:45 UTC | validation, earlier | 45s | **95.6%** (43/45) | 52.4s | **2.0%** (1/50) | 0.91 | 3 |
-| NYC 2026-10-16 01:30-02:00 UTC | validation, earlier | 11s | **93.7%** (134/143) | 26.6s | **0.0%** (0/189) | 2.43 | 7 |
-| Gulf 2026-10-13 20:00-20:15 UTC | validation, earlier | 45s | **99.0%** (101/102) | 45.9s | **0.0%** (0/108) | 1.15 | 6 |
-| Gulf 2026-10-12 20:30-20:45 UTC | validation, earlier | 46s | **97.4%** (111/114) | 50.3s | **0.0%** (0/115) | 0.95 | 1 |
-| NYC 2026-10-15 22:50-23:20 UTC | validation, earlier | 11s | **94.9%** (203/214) | 25.5s | **0.0%** (0/282) | 2.48 | 11 |
-| Gulf 2026-10-12 05:00-05:15 UTC | validation, earlier | 45s | **94.7%** (107/113) | 48.8s | **0.0%** (0/121) | 1.06 | 6 |
-| Gulf 2026-10-11 05:45-06:00 UTC | validation, earlier | 46s | **96.3%** (131/136) | 45.4s | **0.0%** (0/140) | 0.85 | 3 |
-| Gulf 2026-10-16 04:45-05:00 UTC | development | 46s | **88.4%** (84/95) | 52.2s | **1.0%** (1/105) | 0.52 | 5 |
-| Gulf 2026-10-16 04:10-04:25 UTC | development | 46s | **85.7%** (78/91) | 48.3s | **0.0%** (0/105) | 0.47 | 7 |
-| Gulf 2026-10-13 05:30-05:45 UTC | development | 45s | **97.6%** (123/126) | 42.4s | **0.0%** (0/132) | 0.67 | 4 |
-| Gulf 2026-10-14 06:15-06:30 UTC | development | 45s | **96.9%** (125/129) | 49.5s | **0.0%** (0/134) | 0.53 | 2 |
-| Gulf 2026-10-10 02:01-02:16 UTC | development | 45s | **97.6%** (121/124) | 44.5s | **0.0%** (0/125) | 0.78 | 0 |
-| NYC 2026-10-16 17:52-18:07 UTC | development | 11s | **98.4%** (124/126) | -- | **0.0%** | 1.66 | -- |
-| NYC 2026-10-10 02:38-03:08 UTC | development | 11s | **96.0%** (95/99) | 25.8s | **0.0%** (0/150) | 2.15 | 12 |
+| NYC 2026-10-16 18:08-18:23 UTC | validation | 11s | **98.3%** (119/121) | 27.1s | **0.0%** (0/165) | 0.01 | 2 |
+| Gulf 2026-10-12 04:00-04:15 UTC | validation | 45s | **98.1%** (106/108) | 49.8s | **0.0%** (0/111) | 0.03 | 2 |
+| Gulf 2026-10-13 02:00-02:15 UTC | validation | 46s | **94.2%** (98/104) | 51.4s | **0.0%** (0/106) | 0.03 | 0 |
+| Gulf 2026-10-14 04:30-04:45 UTC | validation | 46s | **96.9%** (94/97) | 52.9s | **0.0%** (0/102) | 0.03 | 4 |
+| Gulf 2026-10-11 23:30-23:45 UTC | validation, earlier | 46s | **95.5%** (105/110) | 46.4s | **0.0%** (0/113) | 0.09 | 3 |
+| Gulf 2026-10-13 07:00-07:15 UTC | validation, earlier | 45s | **97.1%** (100/103) | 47.7s | **0.0%** (0/107) | 0.02 | 3 |
+| Gulf 2026-10-14 08:00-08:15 UTC | validation, earlier | 46s | **95.5%** (105/110) | 50.6s | **0.0%** (0/111) | 0.06 | 1 |
+| Gulf 2026-10-16 04:30-04:45 UTC | validation, earlier | 45s | **95.6%** (43/45) | 52.4s | **2.0%** (1/50) | 0.20 | 3 |
+| NYC 2026-10-16 01:30-02:00 UTC | validation, earlier | 11s | **93.7%** (134/143) | 26.6s | **0.0%** (0/189) | 0.01 | 7 |
+| Gulf 2026-10-13 20:00-20:15 UTC | validation, earlier | 45s | **99.0%** (101/102) | 45.9s | **0.0%** (0/108) | 0.10 | 6 |
+| Gulf 2026-10-12 20:30-20:45 UTC | validation, earlier | 46s | **97.4%** (111/114) | 50.3s | **0.0%** (0/115) | 0.00 | 1 |
+| NYC 2026-10-15 22:50-23:20 UTC | validation, earlier | 11s | **94.9%** (203/214) | 25.5s | **0.0%** (0/282) | 0.00 | 11 |
+| Gulf 2026-10-12 05:00-05:15 UTC | validation, earlier | 45s | **94.7%** (107/113) | 48.8s | **0.0%** (0/121) | 0.08 | 6 |
+| Gulf 2026-10-11 05:45-06:00 UTC | validation, earlier | 46s | **96.3%** (131/136) | 45.4s | **0.0%** (0/140) | 0.14 | 3 |
+| Gulf 2026-10-16 04:45-05:00 UTC | development | 46s | **88.4%** (84/95) | 52.2s | **1.0%** (1/105) | 0.03 | 5 |
+| Gulf 2026-10-16 04:10-04:25 UTC | development | 46s | **85.7%** (78/91) | 48.3s | **0.0%** (0/105) | 0.14 | 7 |
+| Gulf 2026-10-13 05:30-05:45 UTC | development | 45s | **97.6%** (123/126) | 42.4s | **0.0%** (0/132) | 0.01 | 4 |
+| Gulf 2026-10-14 06:15-06:30 UTC | development | 45s | **96.9%** (125/129) | 49.5s | **0.0%** (0/134) | 0.02 | 2 |
+| Gulf 2026-10-10 02:01-02:16 UTC | development | 45s | **97.6%** (121/124) | 44.5s | **0.0%** (0/125) | 0.02 | 0 |
+| NYC 2026-10-16 17:52-18:07 UTC | development | 11s | **98.4%** (124/126) | 26.7s | **0.0%** (0/181) | 0.01 | 3 |
+| NYC 2026-10-10 02:38-03:08 UTC | development | 11s | **96.0%** (95/99) | 25.8s | **0.0%** (0/150) | 0.01 | 12 |
 
 **94.2-98.3% recall on the validation windows, no false alarms on
 ordinary traffic** (docs/PROBLEM.md target: under 5%; 0-2% across all
@@ -95,7 +95,7 @@ per aircraft, so these reproduce exactly):
 
 | Window | Role | Recall | False-positive rate | Induced / run |
 |---|---|---|---|---|
-| NYC 2026-10-16 18:08-18:23 UTC | validation | 61.5% (99/161) | 0.0% (0/165) | 1.60 |
+| NYC 2026-10-16 18:08-18:23 UTC | validation | 61.5% (99/161) | 0.0% (0/165) | 1.55 |
 | Gulf 2026-10-12 04:00-04:15 UTC | validation | 89.7% (96/107) | 0.0% (0/111) | 0.10 |
 | Gulf 2026-10-13 02:00-02:15 UTC | validation | 89.5% (94/105) | 0.0% (0/106) | 0.10 |
 | Gulf 2026-10-14 04:30-04:45 UTC | validation | 83.0% (83/100) | 0.0% (0/102) | 0.19 |
@@ -103,10 +103,10 @@ per aircraft, so these reproduce exactly):
 | Gulf 2026-10-13 07:00-07:15 UTC | validation, earlier | 88.8% (95/107) | 0.0% (0/107) | 0.11 |
 | Gulf 2026-10-14 08:00-08:15 UTC | validation, earlier | 90.0% (99/110) | 0.0% (0/111) | 0.15 |
 | Gulf 2026-10-16 04:30-04:45 UTC | validation, earlier | 76.0% (38/50) | 0.0% (0/50) | 0.16 |
-| NYC 2026-10-16 01:30-02:00 UTC | validation, earlier | 35.6% (67/188) | 1.1% (2/189) | 2.88 |
+| NYC 2026-10-16 01:30-02:00 UTC | validation, earlier | 35.6% (67/188) | 1.1% (2/189) | 2.80 |
 | Gulf 2026-10-13 20:00-20:15 UTC | validation, earlier | 78.2% (79/101) | 0.0% (0/108) | 0.24 |
 | Gulf 2026-10-12 20:30-20:45 UTC | validation, earlier | 91.1% (102/112) | 2.6% (3/115) | 0.12 |
-| NYC 2026-10-15 22:50-23:20 UTC | validation, earlier | 43.0% (119/277) | 0.7% (2/282) | 2.90 |
+| NYC 2026-10-15 22:50-23:20 UTC | validation, earlier | 43.0% (119/277) | 0.7% (2/282) | 2.81 |
 | Gulf 2026-10-12 05:00-05:15 UTC | validation, earlier | 86.6% (103/119) | 0.8% (1/121) | 0.15 |
 | Gulf 2026-10-11 05:45-06:00 UTC | validation, earlier | 81.0% (111/137) | 0.0% (0/140) | 0.16 |
 | Gulf 2026-10-16 04:45-05:00 UTC | development | 82.4% (84/102) | 1.0% (1/105) | 0.25 |
@@ -114,8 +114,8 @@ per aircraft, so these reproduce exactly):
 | Gulf 2026-10-13 05:30-05:45 UTC | development | 85.0% (108/127) | 0.8% (1/132) | 0.15 |
 | Gulf 2026-10-14 06:15-06:30 UTC | development | 82.4% (108/131) | 0.7% (1/134) | 0.14 |
 | Gulf 2026-10-10 02:01-02:16 UTC | development | 77.7% (94/121) | 0.0% (0/125) | 0.22 |
-| NYC 2026-10-16 17:52-18:07 UTC | development | 65.0% (115/177) | 0.0% | 1.23 |
-| NYC 2026-10-10 02:38-03:08 UTC | development | 34.9% (51/146) | 1.3% (2/150) | 2.70 |
+| NYC 2026-10-16 17:52-18:07 UTC | development | 65.0% (115/177) | 0.0% (0/181) | 1.20 |
+| NYC 2026-10-10 02:38-03:08 UTC | development | 34.9% (51/146) | 1.3% (2/150) | 2.57 |
 
 Kinematic is a strong secondary signal on Gulf traffic (76-91%, 83-90%
 on the validation windows) since fusion measures ADS-B velocity, and a
@@ -123,6 +123,30 @@ weak one at NYC (35-43%): with 11s updates a deviation has to clear 4
 sigma within 33s, and approach traffic turns all the time (61.5-65% on
 the daytime NYC capture, which has more cruising traffic). No stated
 target; false alarms under 3% everywhere.
+
+### Alert episodes (2026-10-16)
+
+One anomaly should be one alert. Both detectors used to re-alert:
+
+- **Went-dark** closed an episode whenever the track momentarily failed
+  went_dark() -- routinely, since at 45 s cadence with 10% radar
+  dropout a radar gap past the recency limit is common -- and reopened
+  it on the next contact. YETI45 (the demo, docs/DEMO.md) alerted at
+  +54 s, +195 s and +303 s for one dropout. Episodes now stay open until
+  ADS-B actually resumes or the track is retired
+  (`detectors.went_dark_episodes`, used by the live engine, the harness
+  and the replay API).
+- **Kinematic** kept episodes per (track, sensor), so one maneuver could
+  alert from ADS-B and again from radar, and again after any single
+  normal update. Episodes are now per track and close after
+  `consecutive` normal updates, the same bar it takes to open one.
+
+Recall and the false-positive rate are unchanged by construction --
+the first detection is the same -- and measured unchanged. What
+changes is the "induced" column: for went-dark it was almost entirely
+the target re-alerting, and drops from 0.5-2.5 per run to 0.00-0.20
+on every window. The tables above are re-runs with both changes,
+checked row by row: recall and false-positive rates identical.
 
 ### Velocity measurement (2026-10-16 round)
 
@@ -215,10 +239,13 @@ to flag and not what a real maneuver looks like.
   is enough to see the went-dark numbers hold, not to put tight error
   bars on them. Every new capture is free validation data -- score it
   before changing anything.
-- **Induced alerts are still high at NYC** (2.05 / run went-dark, 2.65
-  kinematic): mostly the target's own contacts or neighbours being
-  re-associated once the target's picture changes. Not counted in the
-  false-positive rate, which is measured on clean traffic.
+- **Induced kinematic alerts at NYC (~2.6 / run) are the target
+  itself**, re-alerting during its own maneuver -- all 98 in a 40-run
+  sample. The injected 2g push accelerates without end, so the filter
+  absorbs it, looks normal for two updates, and the push pulls away
+  again: a new episode each time. An artifact of the injection (next
+  item), not of the detector. (Earlier versions of this README blamed
+  neighbouring tracks; that was wrong -- see "Alert episodes".)
 - **The injected 2g maneuver is a sustained push in one direction** --
   displacement grows as t^2 without bound, unlike a real turn. Fine as a
   "can the detector see it" test; not a model of real flight.

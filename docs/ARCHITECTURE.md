@@ -253,6 +253,19 @@ Record real decisions here as they're made, in the format:
 > were counted as misses no detector could avoid; the old scoring stays
 > available as `--include-coverage-gaps`.
 
+> **Decision:** One alert per anomaly: went-dark episodes stay open
+> until ADS-B resumes or the track retires; kinematic episodes are per
+> track and close after as many normal updates as it took to open.
+> **Alternatives considered:** the stateless "flagged this cycle"
+> episodes the detectors had; de-duplicating in the UI only.
+> **Why:** walking through the demo, one injected dropout produced three
+> went-dark alerts minutes apart -- the episode closed on every routine
+> radar gap. An operator would see the same aircraft re-alerted, and the
+> live engine wrote duplicate episodes. The harness never showed it
+> because it scores the first detection; the evidence was in the
+> "induced alerts" column, which had been misattributed to neighbouring
+> tracks. Fixed in the shared detector so live, replay and scoring agree.
+
 > **Decision:** `api/` is a stdlib `http.server`, read-only, serving
 > `web/` from the same origin; replays re-run fusion + detection in
 > memory per request (cached).
