@@ -1,0 +1,3 @@
+#!/bin/sh
+# Kept for muscle memory: same as ./run.sh poll ...
+exec "$(dirname "$0")/run.sh" poll "$@"

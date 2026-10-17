@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dark Track</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="bar">
+    <h1>Dark Track</h1>
+    <nav class="modes" role="tablist">
+      <button role="tab" data-mode="live" aria-selected="true">Live</button>
+      <button role="tab" data-mode="replay" aria-selected="false">Replay</button>
+    </nav>
+    <div id="status" class="status" aria-live="polite"></div>
+  </header>
+
+  <main class="layout">
+    <div id="map" aria-label="Map of fused tracks"></div>
+
+    <aside class="side">
+      <section id="replay-panel" class="panel" hidden>
+        <h2>Replay a capture</h2>
+        <label>Window
+          <select id="window-select"></select>
+        </label>
+        <div class="row">
+          <label>Inject
+            <select id="inject-kind">
+              <option value="">nothing</option>
+              <option value="went_dark">went dark</option>
+              <option value="kinematic">2g maneuver</option>
+            </select>
+          </label>
+          <label>on
+            <select id="inject-target" disabled><option value="">—</option></select>
+          </label>
+        </div>
+        <button id="load-replay" class="primary">Run fusion on this window</button>
+        <p id="replay-note" class="note"></p>
+
+        <div id="transport" class="transport" hidden>
+          <div class="row">
+            <button id="play" aria-label="Play">▶</button>
+            <select id="speed" aria-label="Playback speed">
+              <option value="5">5×</option>
+              <option value="10" selected>10×</option>
+              <option value="30">30×</option>
+              <option value="60">60×</option>
+            </select>
+            <span id="clock" class="clock"></span>
+          </div>
+          <div class="scrub">
+            <input id="scrubber" type="range" min="0" max="1000" value="0" aria-label="Replay position">
+            <div id="alert-ticks" class="alert-ticks"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel legend">
+        <span><i class="dot adsb"></i>ADS-B + radar</span>
+        <span><i class="dot radar"></i>radar only</span>
+        <span><i class="dot dark"></i>went dark</span>
+        <span><i class="dot stale"></i>ADS-B quiet</span>
+      </section>
+
+      <section id="inspector" class="panel" hidden>
+        <div class="row spread">
+          <h2 id="insp-title"></h2>
+          <button id="insp-close" class="ghost" aria-label="Close track details">✕</button>
+        </div>
+        <dl id="insp-fields"></dl>
+        <p id="insp-note" class="note"></p>
+      </section>
+
+      <section class="panel alerts">
+        <h2>Alerts <span id="alert-count" class="count"></span></h2>
+        <ol id="alert-list"></ol>
+        <p id="alert-empty" class="note">No anomalies yet.</p>
+      </section>
+    </aside>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
