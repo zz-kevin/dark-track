@@ -30,18 +30,20 @@ ADS-B interval.
 - **Induced** -- extra alerts in injected runs that weren't in the
   background, per run: side effects of the injection itself.
 
-### Current (2026-10-16)
+### Current (2026-10-16, updated 05:00 UTC)
 
 Window roles:
 
 - **validation** -- scored once, after the code was frozen, and never
   used to choose anything: Gulf 2026-10-13 20:00, Gulf 2026-10-12 20:30,
-  and a second fresh NYC capture (2026-10-16 01:30). These are the
-  numbers to quote.
+  a second fresh NYC capture (2026-10-16 01:30), and two windows of a
+  Gulf morning capture (2026-10-16 04:30, 04:45). These are the numbers
+  to quote.
 - **validation, earlier round** -- the previous change's validation
   windows (NYC 2026-10-15, Gulf 2026-10-12 05:00, Gulf 2026-10-11).
   Not used to choose anything in this round either, but seen before.
-- **development** -- used to diagnose and choose: Gulf 2026-10-14,
+- **development** -- used to diagnose and choose: Gulf 2026-10-16 04:10
+  (the velocity time-offset experiment, docs/FUSION.md), Gulf 2026-10-14,
   Gulf 2026-10-13 05:30, and the original tuning windows (Gulf and NYC
   2026-10-10).
 
@@ -52,17 +54,23 @@ Window roles:
 | NYC 2026-10-16 01:30-02:00 UTC | validation | 11s | **90.0%** (135/150) | 26.6s | **0.0%** (0/189) | 2.32 |
 | Gulf 2026-10-13 20:00-20:15 UTC | validation | 45s | **93.5%** (101/108) | 45.9s | **0.0%** (0/108) | 1.10 |
 | Gulf 2026-10-12 20:30-20:45 UTC | validation | 45s | **96.5%** (111/115) | 50.3s | **0.0%** (0/115) | 0.94 |
+| Gulf 2026-10-16 04:30-04:45 UTC | validation | 45s | **89.6%** (43/48) | 52.4s | **2.0%** (1/50) | 0.90 |
+| Gulf 2026-10-16 04:45-05:00 UTC | validation | 45s | **84.0%** (84/100) | 52.2s | **1.0%** (1/105) | 0.50 |
 | NYC 2026-10-15 22:50-23:20 UTC | validation, earlier | 11s | 91.6% (206/225) | 25.3s | 0.0% (0/282) | 2.38 |
 | Gulf 2026-10-12 05:00-05:15 UTC | validation, earlier | 45s | 90.8% (108/119) | 48.7s | 0.0% (0/121) | 1.01 |
 | Gulf 2026-10-11 05:45-06:00 UTC | validation, earlier | 45s | 94.2% (131/139) | 45.4s | 0.0% (0/140) | 0.88 |
+| Gulf 2026-10-16 04:10-04:25 UTC | development | 46s | 79.6% (78/98) | -- | 0.0% (0/101) | 0.45 |
 | Gulf 2026-10-13 05:30-05:45 UTC | development | 45s | 94.6% (123/130) | 42.4s | 0.0% (0/132) | 0.65 |
 | Gulf 2026-10-14 06:15-06:30 UTC | development | 45s | 95.4% (125/131) | 49.5s | 0.0% (0/134) | 0.52 |
 | Gulf 2026-10-10 02:01-02:16 UTC | development | 45s | 97.6% (121/124) | 44.5s | 0.0% (0/125) | 0.78 |
 | NYC 2026-10-10 02:38-03:08 UTC | development | 11s | 90.1% (100/111) | 25.7s | 0.0% (0/150) | 2.00 |
 
-**90-96.5% recall on the validation windows, and no false went-dark
-alarm on ordinary traffic in any of the ten** (docs/PROBLEM.md target:
-under 5%).
+**84-96.5% recall on the validation windows, 0-2% false alarms**
+(docs/PROBLEM.md target: under 5%). The low end is the Gulf morning
+capture (2026-10-16 04:10-05:00): arrivals turning onto approach and
+close traffic. Traced misses there are a dropout during a turn, where
+the coasting track's prediction is ~4 km off by the next contact, and
+formation pairs (FRS41/FRS42) -- docs/FUSION.md "Known limitations".
 
 **Kinematic** (budget = 3 update intervals; maneuver direction seeded
 per aircraft, so these reproduce exactly):
@@ -72,15 +80,18 @@ per aircraft, so these reproduce exactly):
 | NYC 2026-10-16 | validation | 35.6% (67/188) | 1.1% (2/189) | 2.88 |
 | Gulf 2026-10-13 20:00 | validation | 78.2% (79/101) | 0.0% (0/108) | 0.24 |
 | Gulf 2026-10-12 20:30 | validation | 91.1% (102/112) | 2.6% (3/115) | 0.12 |
+| Gulf 2026-10-16 04:30 | validation | 76.0% (38/50) | 0.0% (0/50) | 0.16 |
+| Gulf 2026-10-16 04:45 | validation | 82.4% (84/102) | 1.0% (1/105) | 0.25 |
 | NYC 2026-10-15 | validation, earlier | 43.0% (119/277) | 0.7% (2/282) | 2.90 |
 | Gulf 2026-10-12 05:00 | validation, earlier | 86.6% (103/119) | 0.8% (1/121) | 0.15 |
 | Gulf 2026-10-11 | validation, earlier | 81.0% (111/137) | 0.0% (0/140) | 0.16 |
+| Gulf 2026-10-16 04:10 | development | 78.4% (76/97) | 1.0% (1/101) | 0.21 |
 | Gulf 2026-10-13 05:30 | development | 85.0% (108/127) | 0.8% (1/132) | 0.15 |
 | Gulf 2026-10-14 | development | 82.4% (108/131) | 0.7% (1/134) | 0.14 |
 | Gulf 2026-10-10 | development | 77.7% (94/121) | 0.0% (0/125) | 0.22 |
 | NYC 2026-10-10 | development | 34.9% (51/146) | 1.3% (2/150) | 2.70 |
 
-Kinematic went from a weak secondary signal (15-50%) to 78-91% on Gulf
+Kinematic went from a weak secondary signal (15-50%) to 76-91% on Gulf
 once fusion measures ADS-B velocity: a 2g maneuver now shows up as a
 velocity the filter believes, instead of a position it partly writes
 off as noise. NYC stays at 35-43% -- with 11s updates the deviation

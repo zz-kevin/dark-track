@@ -4,10 +4,15 @@
 #   ./run.sh radar | fusion | anomaly | api | replay ... | harness ...
 #   ./run.sh accuracy | bench <start> <end> ...   -- fusion evaluation
 #   ./run.sh status        -- what's running, track and alert counts
+#   ./run.sh test          -- unit + end-to-end tests (no database needed)
 # Long-running components also write their output to logs/<name>.log. If
 # one is already running, this shows its live output instead of starting
 # a second copy (Ctrl+C stops watching; the component keeps running).
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+if [ "$1" = test ]; then
+    shift
+    exec "$ROOT/.venv/bin/python" -m unittest discover -s "$ROOT/tests" "$@"
+fi
 if [ "$1" = status ]; then
     for c in poll:ingestion/opensky_poll.py radar:ingestion/radar_sim.py \
              fusion:fusion/engine.py anomaly:anomaly/engine.py api:api/server.py; do
@@ -35,7 +40,7 @@ case "$1" in
     accuracy) script=fusion/accuracy.py ;;
     bench)   script=fusion/bench.py ;;
     api)     script=api/server.py ;;
-    *) echo "usage: $0 {status|poll|radar|fusion|anomaly|api|replay|harness|accuracy|bench} [args...]" >&2; exit 2 ;;
+    *) echo "usage: $0 {status|test|poll|radar|fusion|anomaly|api|replay|harness|accuracy|bench} [args...]" >&2; exit 2 ;;
 esac
 name=$1
 shift

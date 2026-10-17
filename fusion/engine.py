@@ -30,6 +30,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import psycopg2
+
 import db
 import geo
 from associate import associate
@@ -61,6 +63,7 @@ DEFAULT_POLL_SECONDS = 0.25
 # real radar plot is a position, radar_sim's speed/heading only seed.
 ADSB_VEL_STD_MPS = 10.0
 VEL_SKIP_GROUND = True
+VEL_TIME_OFFSET = False
 # ADS-B position noise for the filter. Not the ~10 m a GPS fix is good to:
 # OpenSky's position timestamps jitter by seconds (position-implied speed
 # swings +/-20-30 m/s between fixes), which at 200+ m/s is ~50 m of
@@ -69,6 +72,8 @@ VEL_SKIP_GROUND = True
 R_ADSB_STD_M = 50.0
 # Status line at most this often -- one per 0.25s poll would flood the log.
 STATUS_EVERY_S = 3.0
+# Longest wait between retries while the database is down.
+DB_RETRY_MAX_S = 10.0
 
 # Initial velocity variance when a track's starting velocity comes from the
 # tick's reported speed/heading: ~(20 m/s)^2, vs. the (50 m/s)^2 default
@@ -108,6 +113,12 @@ def tick_from_row(row, source, r_std):
         "aircraft_variant": row.get("aircraft_variant"),
         "v0": reported_velocity(row),
         "altitude_m": row.get("altitude_m"),
+        # How much newer the reported velocity is than the position fix
+        # (0 when unknown -- rows from before velocity_at was recorded).
+        "velocity_lead_s": (
+            (row["velocity_at"] - row["observed_at"]).total_seconds()
+            if row.get("velocity_at") is not None else 0.0
+        ),
     }
 
 
@@ -151,16 +162,21 @@ def _record_update(events, touched, track, tick, created_new_track):
     touched.add(track.id)
 
 
-def _velocity_measurement(tick):
+def _velocity_measurement(tick, accel_std):
     """(v, rv_std) for Track.apply: the reported velocity of an ADS-B tick,
-    or (None, None)."""
+    or (None, None). The velocity is from the aircraft's latest message,
+    often seconds after its position fix; under the filter's own
+    white-noise-acceleration model it has drifted by ~accel_std * gap since
+    the fix, so that's added to its noise. Measured on NYC approach turns:
+    reported heading led the position-implied one through every turn."""
     if tick["source"] != "adsb" or ADSB_VEL_STD_MPS is None or tick.get("v0") is None:
         return None, None
     # On the ground (OpenSky reports no barometric altitude), a taxiing
     # aircraft's reported track is unreliable at walking-pace speeds.
     if VEL_SKIP_GROUND and tick.get("altitude_m") is None:
         return None, None
-    return tick["v0"], ADSB_VEL_STD_MPS
+    lead = abs(tick.get("velocity_lead_s", 0.0)) if VEL_TIME_OFFSET else 0.0
+    return tick["v0"], math.hypot(ADSB_VEL_STD_MPS, accel_std * lead)
 
 
 def apply_identified(ticks, tracks, callsign_to_track, accel_std, events, touched):
@@ -170,7 +186,7 @@ def apply_identified(ticks, tracks, callsign_to_track, accel_std, events, touche
         track = tracks.get(tid)
         if track is not None:
             track.apply(tick["x"], tick["y"], tick["observed_at"], "adsb", tick["r_std"],
-                        *_velocity_measurement(tick))
+                        *_velocity_measurement(tick, accel_std))
             track.note_type(tick.get("aircraft_type"), tick.get("aircraft_variant"))
             track.last_adsb_alt_m = tick.get("altitude_m")
             _record_update(events, touched, track, tick, created_new_track=False)
@@ -217,7 +233,7 @@ def _apply_anonymous_slice(ticks, tracks, accel_std, gate_dist_m, gate_staleness
         track = tracks.get(tid)
         if track is not None:
             track.apply(tick["x"], tick["y"], tick["observed_at"],
-                        tick["source"], tick["r_std"], *_velocity_measurement(tick))
+                        tick["source"], tick["r_std"], *_velocity_measurement(tick, accel_std))
             _record_update(events, touched, track, tick, created_new_track=False)
         else:
             track = new_track(tick, accel_std)
@@ -321,6 +337,10 @@ def run(poll_seconds, gate_dist_m, gate_staleness_s, track_ttl_s,
 
     pending = {"adsb": 0, "radar": 0, "touched": set(), "retired": 0}
     last_status = 0.0
+    # Output fused but not yet written -- kept across a database outage so
+    # the event log and fused_tracks catch up once Postgres is back.
+    unwritten = {"events": [], "touched": set(), "retired": []}
+    db_down_since = None
 
     while True:
         try:
@@ -345,8 +365,16 @@ def run(poll_seconds, gate_dist_m, gate_staleness_s, track_ttl_s,
                 default=datetime.now(timezone.utc),
             )
             stale_ids = prune_stale(tracks, callsign_to_track, now, track_ttl_s)
-            if events or touched or stale_ids:
-                persist(tracks, touched, events, stale_ids, now)
+            unwritten["events"] += events
+            unwritten["touched"] |= touched
+            unwritten["retired"] += stale_ids
+            if unwritten["events"] or unwritten["touched"] or unwritten["retired"]:
+                persist(tracks, unwritten["touched"], unwritten["events"],
+                        unwritten["retired"], now)
+                unwritten = {"events": [], "touched": set(), "retired": []}
+            if db_down_since is not None:
+                print(f"database back after {time.time() - db_down_since:.0f}s -- caught up")
+                db_down_since = None
 
             pending["adsb"] += len(adsb_ticks)
             pending["radar"] += len(radar_ticks)
@@ -365,6 +393,16 @@ def run(poll_seconds, gate_dist_m, gate_staleness_s, track_ttl_s,
                 )
                 pending = {"adsb": 0, "radar": 0, "touched": set(), "retired": 0}
                 last_status = time.time()
+        except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+            # Postgres restarting or unreachable: keep the in-memory tracks
+            # and retry. Reads that failed consumed nothing (cursors only
+            # advance on success); fused output waits in `unwritten`.
+            if db_down_since is None:
+                db_down_since = time.time()
+                print(f"database unavailable ({str(e).strip().splitlines()[0]}) -- "
+                      f"keeping {len(tracks)} tracks in memory, retrying")
+            time.sleep(min(DB_RETRY_MAX_S, max(poll_seconds, time.time() - db_down_since)))
+            continue
         except Exception as e:
             print(f"fusion tick failed: {e}")
             raise

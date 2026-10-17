@@ -58,3 +58,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS raw_ticks_adsb_dedup_idx
 -- longer be anonymous. NULL on contacts written before it was recorded;
 -- radar_truth.py infers those.
 ALTER TABLE raw_ticks ADD COLUMN IF NOT EXISTS truth_tick_id BIGINT;
+
+-- ADS-B only: when the reported velocity is from (OpenSky's last_contact),
+-- often a few seconds after the position fix in observed_at. Fusion
+-- de-weights the velocity measurement by that gap. NULL on older rows.
+ALTER TABLE raw_ticks ADD COLUMN IF NOT EXISTS velocity_at TIMESTAMPTZ;

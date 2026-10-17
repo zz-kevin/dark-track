@@ -26,6 +26,7 @@ success criteria.
 | `api/` | Serves the fused picture and anomaly feed to the frontend |
 | `web/` | Map-based visualization and replay UI |
 | `docs/` | Problem statement, architecture, and design-decision writeups |
+| `tests/` | Unit + end-to-end tests on synthetic traffic, no database needed (`./run.sh test`; CI runs them on every push) |
 
 ## Status
 
@@ -41,12 +42,12 @@ Against the success criteria in [`docs/PROBLEM.md`](docs/PROBLEM.md):
 
 | Criterion | Target | Measured |
 |---|---|---|
-| Fusion accuracy | 90% of aircraft | Gulf 97.1–98.5%; NYC 81.2% (93.0% airborne) |
-| Went-dark false alarms | < 5%, held-out | 0.0% |
-| Went-dark detection | within silence + 1 interval | 90.0–96.5% of injected events |
+| Fusion accuracy | 90% of aircraft | Gulf 91.7–98.5%; NYC 81.2% (93.0% airborne) |
+| Went-dark false alarms | < 5%, held-out | 0.0–2.0% |
+| Went-dark detection | within silence + 1 interval | 84.0–96.5% of injected events |
 | Throughput | 150 tracks, < 500 ms | 100% under 500 ms at ~510 tracks |
 
-All measured on validation windows nothing was tuned on (two Gulf, one
+All measured on validation windows nothing was tuned on (four Gulf, one
 fresh NYC capture). NYC all-traffic accuracy is the one miss: taxiing
 aircraft closer together than the radar can resolve.
 
@@ -80,6 +81,14 @@ The UI works without the live pipeline: **Replay** re-runs fusion and
 anomaly detection over any stored 15-minute window, and can inject a
 went-dark or a 2g maneuver on a chosen aircraft first, which is the
 quickest demo.
+
+`./run.sh test` runs the test suite (Kalman filter, gating and
+association, detectors, injection, radar ground truth, an end-to-end
+replay, and a database outage mid-run) in under a second.
+
+The fusion and anomaly engines ride out a Postgres restart: they keep
+their tracks in memory, retry with backoff, and write what they fused
+in the meantime once the database is back.
 
 Evaluating it (all replay a stored window; add `--region` if both pollers
 ran during it):
