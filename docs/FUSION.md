@@ -178,22 +178,29 @@ an aircraft passes at >= 90% correct contacts.
 
 | Window | Role | Aircraft passing | Airborne only | Contacts correct | Fused error p50 / p95 |
 |---|---|---|---|---|---|
-| NYC 2026-10-16 01:30-02:00 | validation | **81.2%** (173/213) | 93.0% | 94.9% | 25 / 140 m |
-| Gulf 2026-10-13 20:00-20:15 | validation | **98.5%** (132/134) | 99.2% | 99.6% | 25 / 59 m |
-| Gulf 2026-10-12 20:30-20:45 | validation | **97.1%** (135/139) | 97.0% | 99.5% | 24 / 58 m |
-| Gulf 2026-10-16 04:30-04:45 | validation | **91.7%** (66/72) | 91.8% | 96.9% | 29 / 147 m |
-| Gulf 2026-10-16 04:45-05:00 | validation | **93.8%** (122/130) | 94.3% | 96.4% | 25 / 84 m |
-| NYC 2026-10-15 22:50-23:20 | validation, earlier | 89.8% (272/303) | 98.5% | 95.2% | 24 / 87 m |
-| Gulf 2026-10-12 05:00-05:15 | validation, earlier | 98.6% (140/142) | 98.6% | 99.7% | 24 / 54 m |
-| Gulf 2026-10-11 05:45-06:00 | validation, earlier | 100.0% (159/159) | 100.0% | 100.0% | 23 / 56 m |
-| Gulf 2026-10-16 04:10-04:25 | development | 93.1% (121/130) | 94.2% | 97.7% | 26 / 76 m |
-| Gulf 2026-10-13 05:30-05:45 | development | 98.1% (156/159) | 98.7% | 99.6% | 23 / 59 m |
-| Gulf 2026-10-14 06:15-06:30 | development | 99.3% (151/152) | 100.0% | 99.7% | 24 / 60 m |
-| Gulf 2026-10-10 02:01-02:16 | development | 99.3% (146/147) | 99.3% | 99.8% | 24 / 53 m |
-| NYC 2026-10-10 02:38-03:08 | development | 84.1% (127/151) | 92.4% | 95.0% | 27 / 141 m |
+| Gulf 2026-10-12 04:00-04:15 UTC | validation | **100.0%** (122/122) | 100.0% | 99.9% | 23 / 56 m |
+| Gulf 2026-10-13 02:00-02:15 UTC | validation | **99.2%** (129/130) | 99.2% | 99.9% | 23 / 56 m |
+| Gulf 2026-10-14 04:30-04:45 UTC | validation | **96.7%** (117/121) | 96.7% | 98.9% | 24 / 58 m |
+| Gulf 2026-10-11 23:30-23:45 UTC | validation, earlier | **99.2%** (131/132) | 100.0% | 99.9% | 24 / 54 m |
+| Gulf 2026-10-13 07:00-07:15 UTC | validation, earlier | **100.0%** (124/124) | 100.0% | 100.0% | 23 / 53 m |
+| Gulf 2026-10-14 08:00-08:15 UTC | validation, earlier | **94.2%** (114/121) | 94.2% | 97.7% | 24 / 73 m |
+| Gulf 2026-10-16 04:30-04:45 UTC | validation, earlier | **91.7%** (66/72) | 91.8% | 96.9% | 29 / 147 m |
+| NYC 2026-10-16 01:30-02:00 UTC | validation, earlier | **81.2%** (173/213) | 93.0% | 94.9% | 25 / 140 m |
+| Gulf 2026-10-13 20:00-20:15 UTC | validation, earlier | **98.5%** (132/134) | 99.2% | 99.6% | 25 / 59 m |
+| Gulf 2026-10-12 20:30-20:45 UTC | validation, earlier | **97.1%** (135/139) | 97.0% | 99.5% | 24 / 58 m |
+| NYC 2026-10-15 22:50-23:20 UTC | validation, earlier | **89.8%** (272/303) | 98.5% | 95.2% | 24 / 87 m |
+| Gulf 2026-10-12 05:00-05:15 UTC | validation, earlier | **98.6%** (140/142) | 98.6% | 99.7% | 24 / 54 m |
+| Gulf 2026-10-11 05:45-06:00 UTC | validation, earlier | **100.0%** (159/159) | 100.0% | 100.0% | 23 / 56 m |
+| Gulf 2026-10-16 04:45-05:00 UTC | development | **93.8%** (122/130) | 94.3% | 96.4% | 25 / 84 m |
+| Gulf 2026-10-16 04:10-04:25 UTC | development | **93.1%** (121/130) | 94.2% | 97.7% | 26 / 76 m |
+| Gulf 2026-10-13 05:30-05:45 UTC | development | **98.1%** (156/159) | 98.7% | 99.6% | 23 / 59 m |
+| Gulf 2026-10-14 06:15-06:30 UTC | development | **99.3%** (151/152) | 100.0% | 99.7% | 24 / 60 m |
+| Gulf 2026-10-10 02:01-02:16 UTC | development | **99.3%** (146/147) | 99.3% | 99.8% | 24 / 53 m |
+| NYC 2026-10-10 02:38-03:08 UTC | development | **84.1%** (127/151) | 92.4% | 95.0% | 27 / 141 m |
 
 Roles as in anomaly/README.md. Gulf clears the 90% target everywhere
-(91.7-100%; the Gulf morning capture is the low end). NYC airborne does too (92.4-98.5%); NYC all-traffic
+(91.7-100%; 96.7-100% on the validation windows; the Gulf morning
+capture is the low end). NYC airborne does too (92.4-98.5%); NYC all-traffic
 doesn't (81.2-89.8%), because of ground traffic -- the 2026-10-16
 capture, at night, has proportionally more of it.
 
@@ -284,13 +291,33 @@ pairs (A04/A05).
   45 s ahead; the IMM cut the miss from 3.8 km to 2.7 km, but ABY271,
   holding in the same stack, still took the contact. And a filter that
   explains maneuvers stops flagging them: kinematic recall collapsed.
-  What would separate a holding stack is altitude: fusion ignores it,
-  and radar_sim copies ADS-B altitude onto contacts exactly, so using it
-  needs a realistic radar height error first (a simulator change, not
-  a fusion one). (Went-dark/kinematic sweeps on the other two windows
+  What would separate a holding stack is altitude -- tried next, below. (Went-dark/kinematic sweeps on the other two windows
   were stopped once the target window had decided it; the shared
   association change was verified identical for the CV filter on 5,684
   NYC ticks.)
+- **Altitude in association: measured, opt-in.** radar_sim now gives
+  contacts a 300 m height error (a 3D surveillance radar's, roughly) and
+  records it (`raw_ticks.altitude_std_m`); contacts stored before that
+  carried the ADS-B altitude exactly and get the same error at replay
+  time (`simulate.py`, seeded per row). Each track keeps an altitude
+  filter (`altitude.py`), and with `associate.USE_ALTITUDE = True` height
+  is a third dimension of the association likelihood and gate.
+  - It fixes the traced holding-stack miss: RWD9308 (FL230) and ABY271
+    (~5,000 m) were 2 km apart vertically; with altitude the dark
+    RWD9308 track keeps its contact and went-dark fires 39 s after the
+    dropout (Gulf 2026-10-16 04:10, went-dark 85.7% -> 86.8%).
+  - It found a real-data hazard: FRS91's ADS-B reported 937 m between
+    two ~5,000 m fixes 2 s apart. The altitude filter now skips readings
+    > 5 sigma off (re-initialising after two in a row) and bounds
+    vertical rate at 60 m/s -- before that, the glitch wrecked
+    association for the whole formation (04:45 window accuracy 93.8% ->
+    88.9%; 92.3% with the fix).
+  - It costs a little in same-level formations, where height adds noise
+    and no information (FRS41, FDB34Q on the 04:45 window: -2 aircraft).
+  - On six validation windows it was neutral: went-dark identical or one
+    aircraft lower per window (about -2 of 630 injected events),
+    accuracy identical, kinematic +1. So it's off by default -- holding
+    stacks are rare in this data.
 - **Velocity/position time offset: measured, not used.** OpenSky's
   velocity is from the latest message, ~2.5 s (up to a minute) newer
   than the position fix. The poller now records that time

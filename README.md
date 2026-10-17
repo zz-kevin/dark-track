@@ -42,13 +42,13 @@ Against the success criteria in [`docs/PROBLEM.md`](docs/PROBLEM.md):
 
 | Criterion | Target | Measured |
 |---|---|---|
-| Fusion accuracy | 90% of aircraft | Gulf 91.7–98.5%; NYC 81.2% (93.0% airborne) |
-| Went-dark false alarms | < 5%, held-out | 0.0–2.0% |
-| Went-dark detection | within silence + 1 interval | 84.0–96.5% of injected events |
-| Throughput | 150 tracks, < 500 ms | 100% under 500 ms at ~510 tracks |
+| Fusion accuracy | 90% of aircraft | Gulf 96.7–100%; NYC 81.2–89.8% (93.0–98.5% airborne) |
+| Went-dark false alarms | < 5%, held-out | 0.0% (0–2% across all 19 scored windows) |
+| Went-dark detection | within silence + 1 interval | 94.2–98.1% of injected events |
+| Throughput | 150 tracks, < 500 ms | 100% under 500 ms at ~510 tracks (max 315 ms) |
 
-All measured on validation windows nothing was tuned on (four Gulf, one
-fresh NYC capture). NYC all-traffic accuracy is the one miss: taxiing
+Gulf numbers are from validation windows nothing was tuned on; NYC's
+are its two fresh captures (validation in earlier rounds). NYC all-traffic accuracy is the one miss: taxiing
 aircraft closer together than the radar can resolve.
 
 ## Running it

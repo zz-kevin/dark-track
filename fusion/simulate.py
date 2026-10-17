@@ -10,6 +10,7 @@ against stored data: anomaly/harness.py (precision/recall), accuracy.py
 endpoint.
 """
 
+import random
 from collections import defaultdict
 from datetime import timedelta
 
@@ -29,6 +30,9 @@ DEFAULT_PARAMS = dict(
     gate_staleness_s=30.0,
     track_ttl_s=120.0,
     r_adsb_std_m=engine.R_ADSB_STD_M,
+    # Height error for radar contacts stored with the ADS-B altitude copied
+    # exactly (before radar_sim simulated height error), added at read time.
+    radar_height_std_m=300.0,
     r_radar_std_m=150.0,
 )
 
@@ -78,6 +82,16 @@ def set_reference_from(ticks):
         )
 
 
+def _with_radar_height_error(row, std):
+    """A radar row stored with the ADS-B altitude copied exactly gets the
+    height error radar_sim now adds, seeded by row id so every replay of
+    a window sees the same contacts."""
+    if row["source"] != "radar" or row["altitude_m"] is None or row.get("altitude_std_m"):
+        return row
+    rng = random.Random(row["id"])
+    return {**row, "altitude_m": row["altitude_m"] + rng.gauss(0, std), "altitude_std_m": std}
+
+
 def run(ticks, params=None):
     """Generator: fuses `ticks` (raw_ticks rows, both sources) cycle by
     cycle. Yields one dict per poll cycle:
@@ -96,6 +110,7 @@ def run(ticks, params=None):
     for poll_time, batch in poll_cycles(ticks, p["poll_seconds"]):
         identified, anonymous = [], []
         for row in batch:
+            row = _with_radar_height_error(row, p["radar_height_std_m"])
             r_std = p["r_adsb_std_m"] if row["source"] == "adsb" else p["r_radar_std_m"]
             tick = engine.tick_from_row(row, row["source"], r_std)
             if row["source"] == "adsb" and row["external_id"] is not None:

@@ -34,7 +34,7 @@ import importlib.util
 import sys
 import zlib
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -178,7 +178,19 @@ def _airborne_at(ticks, external_id, at):
     return alt is not None and alt >= MIN_AIRBORNE_ALT_M
 
 
-def sweep(kind, ticks, params, latency_budget_s):
+def _radar_sees_it(radar_times, cutoff, params, budget_s):
+    """Whether any of the target's *own* radar contacts falls where
+    went_dark() could fire within budget: ADS-B silent for adsb_silence_s
+    and radar within radar_recency_s, i.e. a contact in
+    [cutoff + silence - recency, cutoff + budget]. Otherwise the dropout
+    landed in a real coverage gap -- both sensors had already lost the
+    aircraft -- and no detector could flag it."""
+    lo = cutoff + timedelta(seconds=params["adsb_silence_s"] - params["radar_recency_s"])
+    hi = cutoff + timedelta(seconds=budget_s)
+    return any(lo <= t <= hi for t in radar_times)
+
+
+def sweep(kind, ticks, params, latency_budget_s, include_coverage_gaps=False):
     """Recall: one injected event per eligible aircraft, each its own run.
 
     False alarms are scored in two parts, so the same alert isn't counted
@@ -193,12 +205,23 @@ def sweep(kind, ticks, params, latency_budget_s):
         injection itself (e.g. the target's own radar contacts orphaned
         into a new track), averaged per run.
     Only alerts of the detector being swept count; a went-dark sweep
-    doesn't score kinematic alerts as its false positives."""
+    doesn't score kinematic alerts as its false positives.
+
+    Went-dark only scores dropouts the target's own radar contacts could
+    reveal (_radar_sees_it). Before 2026-10-16 the check was "any radar
+    contact after the cutoff" -- any aircraft's -- so dropouts injected
+    into real coverage gaps (ADS-B, and so the radar derived from it,
+    already silent for minutes) counted as misses.
+    include_coverage_gaps=True reproduces that scoring."""
     kind_name = KIND_NAME[kind]
     candidates = eligible_external_ids(ticks)
     background = [d for d in run_scenario(ticks, params) if d["kind"] == kind_name]
     background_keys = {_alert_key(d) for d in background}
-    radar_sources, _ = radar_truth.label(ticks) if kind == "kinematic" else ({}, None)
+    radar_sources, _ = radar_truth.label(ticks)
+    radar_times = defaultdict(list)
+    by_id = {t["id"]: t for t in ticks}
+    for rid, src in radar_sources.items():
+        radar_times[src["external_id"]].append(by_id[rid]["observed_at"])
     results = []
     induced = []
     skipped = []
@@ -217,6 +240,12 @@ def sweep(kind, ticks, params, latency_budget_s):
             # went_dark() deliberately ignores ground traffic, so a dropout
             # injected while taxiing isn't a detectable event to score.
             skipped.append((eid, "on the ground at the injected dropout"))
+            continue
+        if (kind == "went_dark" and not include_coverage_gaps
+                and not _radar_sees_it(radar_times[eid], gt["injected_at"], params,
+                                       latency_budget_s)):
+            skipped.append((eid, "coverage gap: none of its own radar contacts "
+                                 "in the detection window"))
             continue
 
         detections = [d for d in run_scenario(modified, params) if d["kind"] == kind_name]
@@ -267,6 +296,9 @@ def parse_args():
         sp.add_argument("end", type=parse_ts)
         if mode == "one":
             sp.add_argument("--external-id", required=True)
+        sp.add_argument("--include-coverage-gaps", action="store_true",
+                        help="went_dark: also score dropouts injected where the target's "
+                             "own radar contacts can't reveal them (pre-2026-10-16 scoring)")
         sp.add_argument("--region", choices=sorted(regions.REGIONS), default=None,
                         help="required when the window holds more than one region's traffic")
         sp.add_argument("--latency-budget-s", type=float, default=None,
@@ -300,7 +332,7 @@ def main():
     kind = "went_dark" if args.kind == "went_dark" else "kinematic_inconsistency"
 
     if args.mode == "sweep":
-        sweep(args.kind, ticks, params, budget)
+        sweep(args.kind, ticks, params, budget, args.include_coverage_gaps)
     else:
         if args.kind == "went_dark":
             modified, gt = inject.inject_went_dark(ticks, args.external_id)

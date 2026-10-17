@@ -53,5 +53,20 @@ class RadarTruthTest(unittest.TestCase):
         self.assertEqual(wrong, [])
 
 
+class RadarSimTest(unittest.TestCase):
+    def test_height_error_is_applied_and_recorded(self):
+        import random
+        from support import radar_sim
+        src = flight("AAA1", 25.0, 53.0, 90.0, 220.0, minutes=1)[0]
+        rng = random.Random(1)
+        rows = [radar_sim.make_radar_row(src, 150.0, 1.0, 4.0, rng, 300.0) for _ in range(400)]
+        errs = [r["altitude_m"] - src["altitude_m"] for r in rows]
+        self.assertTrue(all(r["altitude_std_m"] == 300.0 for r in rows))
+        self.assertAlmostEqual((sum(e * e for e in errs) / len(errs)) ** 0.5, 300.0, delta=40)
+        ground = radar_sim.make_radar_row({**src, "altitude_m": None}, 150.0, 1.0, 4.0, rng)
+        self.assertIsNone(ground["altitude_m"])
+        self.assertIsNone(ground["altitude_std_m"])
+
+
 if __name__ == "__main__":
     unittest.main()

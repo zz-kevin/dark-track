@@ -63,3 +63,9 @@ ALTER TABLE raw_ticks ADD COLUMN IF NOT EXISTS truth_tick_id BIGINT;
 -- often a few seconds after the position fix in observed_at. Fusion
 -- de-weights the velocity measurement by that gap. NULL on older rows.
 ALTER TABLE raw_ticks ADD COLUMN IF NOT EXISTS velocity_at TIMESTAMPTZ;
+
+-- Radar only: std dev (m) of the height error radar_sim added to this
+-- contact's altitude_m. NULL on contacts written before height error was
+-- simulated -- those carry the ADS-B altitude exactly, and replay tools
+-- add the same error at read time (fusion/simulate.py).
+ALTER TABLE raw_ticks ADD COLUMN IF NOT EXISTS altitude_std_m DOUBLE PRECISION;

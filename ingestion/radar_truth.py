@@ -11,7 +11,8 @@ exactly that link, so this module recovers it:
     `truth_tick_id`, the ADS-B row they were derived from. Exact.
   - Older contacts are matched back by inverting radar_sim.make_radar_row:
     the source ADS-B tick is ~latency_min..latency_max seconds earlier,
-    has the identical altitude_m (copied through unchanged), speed and
+    has the same altitude_m (copied exactly before 2026-10-16, within
+    radar_sim's height error after), speed and
     heading within radar_sim's small jitter of the contact's, and
     dead-reckoned forward by the latency lands within a few noise std
     devs of the contact. A contact with two plausible sources (or none)
@@ -49,6 +50,19 @@ def true_position(source_tick, at):
     dt = (at - source_tick["observed_at"]).total_seconds()
     return advance(source_tick["lat"], source_tick["lon"],
                    source_tick["velocity_mps"], source_tick["heading_deg"], dt)
+
+
+def _altitude_match(src, r, sigmas=4.0):
+    """Contacts written before radar_sim simulated height error carry the
+    ADS-B altitude exactly; later ones within altitude_std_m of it."""
+    if (src["altitude_m"] is None) != (r["altitude_m"] is None):
+        return False
+    if src["altitude_m"] is None:
+        return True
+    std = r.get("altitude_std_m")
+    if not std:
+        return src["altitude_m"] == r["altitude_m"]
+    return abs(src["altitude_m"] - r["altitude_m"]) <= sigmas * std
 
 
 def _kinematics_match(src, r, sigmas=4.0):
@@ -94,7 +108,7 @@ def label(ticks, latency_min=1.0, latency_max=4.0, noise_std_m=150.0):
         hi = bisect.bisect_right(times, r["observed_at"] - timedelta(seconds=latency_min) + slack)
         plausible = []
         for src in adsb[lo:hi]:
-            if src["altitude_m"] != r["altitude_m"] or not _kinematics_match(src, r):
+            if not _altitude_match(src, r) or not _kinematics_match(src, r):
                 continue
             lat, lon = true_position(src, r["observed_at"])
             d = distance_m(lat, lon, r["lat"], r["lon"])

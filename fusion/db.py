@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import psycopg2
+import psycopg2.errors
 from psycopg2.extras import execute_values
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql:///dark_track")
@@ -113,14 +114,28 @@ def latest_raw_id(source):
         return cur.fetchone()[0]
 
 
+@contextmanager
+def _schema_hint():
+    """Same as ingestion/db.py's schema_hint (kept local -- each module's
+    db.py stands alone): a missing raw_ticks column means an older
+    database that needs `python3 ingestion/db.py` once."""
+    try:
+        yield
+    except psycopg2.errors.UndefinedColumn as e:
+        raise RuntimeError(
+            f"{str(e).strip().splitlines()[0]} -- this version reads raw_ticks columns "
+            f"your database doesn't have yet. Run `python3 ingestion/db.py` once "
+            f"(adds them; existing rows are kept).") from None
+
+
 def raw_ticks_since(source, since_id, bbox=None):
     where, params = _bbox_sql(bbox)
-    with get_conn() as conn, conn.cursor() as cur:
+    with get_conn() as conn, conn.cursor() as cur, _schema_hint():
         cur.execute(
             f"""
             SELECT id, external_id, lat, lon, observed_at, aircraft_type,
                    aircraft_variant, velocity_mps, heading_deg, altitude_m,
-                   velocity_at
+                   velocity_at, altitude_std_m
             FROM raw_ticks
             WHERE source = %s AND id > %s{where}
             ORDER BY id
@@ -129,7 +144,7 @@ def raw_ticks_since(source, since_id, bbox=None):
         )
         cols = ["id", "external_id", "lat", "lon", "observed_at",
                 "aircraft_type", "aircraft_variant", "velocity_mps",
-                "heading_deg", "altitude_m", "velocity_at"]
+                "heading_deg", "altitude_m", "velocity_at", "altitude_std_m"]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 

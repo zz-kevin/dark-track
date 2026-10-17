@@ -42,5 +42,17 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(false, [])
 
 
+class CoverageGapScoringTest(unittest.TestCase):
+    def test_only_dropouts_its_own_radar_could_reveal_are_scored(self):
+        from datetime import timedelta
+        params = {"adsb_silence_s": 68.0, "radar_recency_s": 58.0}
+        cut = support.T0
+        seen = [cut + timedelta(seconds=50)]   # inside [cut+10s, cut+112s]
+        gap = [cut + timedelta(seconds=300)]   # aircraft already unseen
+        self.assertTrue(harness._radar_sees_it(seen, cut, params, 112.0))
+        self.assertFalse(harness._radar_sees_it(gap, cut, params, 112.0))
+        self.assertFalse(harness._radar_sees_it([], cut, params, 112.0))
+
+
 if __name__ == "__main__":
     unittest.main()

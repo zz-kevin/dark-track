@@ -239,6 +239,20 @@ Record real decisions here as they're made, in the format:
 > the negative result is the finding, and the mixture-likelihood
 > association it needed is exact for one model.
 
+> **Decision:** Simulated radar measures height (300 m error); altitude
+> in association is a tested opt-in, off by default. Went-dark scoring
+> only counts dropouts the target's own radar could reveal.
+> **Alternatives considered:** altitude on by default; leave radar
+> heights exact; keep scoring every injected dropout.
+> **Why:** exact radar heights were never realistic. Altitude fixed the
+> traced holding-stack miss, but was neutral on six validation windows
+> and slightly negative in same-level formations, so it doesn't earn the
+> default (same rule as the velocity time offset). The scorer fix is a
+> correction, not a tuning: dropouts injected into real coverage gaps
+> -- ADS-B and the radar derived from it already silent for minutes --
+> were counted as misses no detector could avoid; the old scoring stays
+> available as `--include-coverage-gaps`.
+
 > **Decision:** `api/` is a stdlib `http.server`, read-only, serving
 > `web/` from the same origin; replays re-run fusion + detection in
 > memory per request (cached).

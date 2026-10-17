@@ -22,6 +22,7 @@ Design reasoning and rejected alternatives are in
 | `db.py` | Reads `raw_ticks` (shared with `ingestion/`), writes the fused picture |
 | `geo.py` | lat/lon <-> local ENU meters, so the filter works in plain Euclidean space |
 | `kalman.py` | The per-track constant-velocity Kalman filter (the default) |
+| `altitude.py` | Per-track altitude estimate (with ADS-B glitch rejection); used in association only when `associate.USE_ALTITUDE` is on |
 | `imm.py` | Opt-in interacting-multiple-model filter (constant velocity + coordinated turn); measured, not used -- see docs/FUSION.md |
 | `track.py` | Wraps a filter with identity/recency bookkeeping + confidence heuristic |
 | `associate.py` | Gating + Hungarian assignment for anonymous ticks |
@@ -49,7 +50,7 @@ Add `--region nyc|gulf` if both pollers ran during the window. `bench.py`
 writes to `dark_track_bench` (created if missing), never the live tables.
 
 **Accuracy** (aircraft with >= 90% of radar contacts on their own track,
-within 300 m, within 5 s), on validation windows: Gulf 91.7-98.5%,
+within 300 m, within 5 s), on validation windows: Gulf 96.7-100%,
 NYC 81.2% (93.0% airborne -- the gap is taxiing traffic). Every window,
 and the failure analysis, in [`../docs/FUSION.md`](../docs/FUSION.md).
 
@@ -96,6 +97,9 @@ interval, which no fusion change can affect.
       the turn-dropout window and kinematic detection collapses, so the
       default stays constant velocity. Association now scores per-model
       mixtures (identical for one model). See docs/FUSION.md.
-- [ ] Next: radar altitude with a realistic height error in radar_sim,
-      then altitude in association -- what would separate holding
-      stacks and the remaining Gulf morning misses.
+- [x] Radar height error in radar_sim; altitude in association as an
+      opt-in (fixed the holding-stack miss, neutral on six validation
+      windows). Went-dark scoring no longer counts coverage gaps.
+- [ ] Open: same-level formations (FRS41/FRS42) -- inside radar's
+      resolution in every dimension; nothing in the current sensor model
+      separates them.
