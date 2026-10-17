@@ -33,7 +33,22 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
 
 // The map's box changes with the layout (phone breakpoint, panels), not
 // only on window resize -- Leaflet has to be told, or tiles go missing.
-new ResizeObserver(() => map.invalidateSize()).observe($("map"));
+// A fit made while the map has no size (page loaded in a background tab,
+// pane still laying out) lands at zoom 0 -- the whole world -- so remember
+// the intended view and apply it once the map actually has a size.
+let fitTarget = null;
+let mapHadSize = false;
+function fitTo(bounds) {
+  fitTarget = bounds;
+  if (mapHadSize) map.fitBounds(bounds);
+}
+new ResizeObserver(() => {
+  const el = $("map");
+  const hasSize = el.clientWidth > 0 && el.clientHeight > 0;
+  map.invalidateSize();
+  if (hasSize && !mapHadSize && fitTarget) map.fitBounds(fitTarget);
+  mapHadSize = hasSize;
+}).observe($("map"));
 
 const markers = new Map(); // track id -> { marker, state, heading }
 const trailLayer = L.layerGroup().addTo(map);
@@ -94,7 +109,7 @@ function renderTracks(tracks) {
     }
   }
   if (!fittedOnce && tracks.length) {
-    map.fitBounds(L.latLngBounds(tracks.map((t) => [t.lat, t.lon])).pad(0.1));
+    fitTo(L.latLngBounds(tracks.map((t) => [t.lat, t.lon])).pad(0.1));
     fittedOnce = true;
   }
 }
@@ -402,7 +417,7 @@ const player = {
     $("inspector").hidden = true;
     // Fit the whole window's traffic, not just the first frame's.
     const pts = d.frames.filter((_, i) => i % 10 === 0).flatMap((f) => f.tracks.map((r) => [r[1], r[2]]));
-    if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.05));
+    if (pts.length) fitTo(L.latLngBounds(pts).pad(0.05));
     fittedOnce = true;
     // With an injection, start shortly before it rather than at the window start.
     this.t = inj ? Math.max(d.t0, inj.injected_at - 90) : d.t0;

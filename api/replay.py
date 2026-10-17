@@ -97,7 +97,7 @@ def run(start, end, step_s=6.0, inject_kind=None, target=None, region=None):
     silence, recency = detectors.went_dark_thresholds(params["adsb_interval_s"])
 
     meta, frames, alerts = {}, [], []
-    kinematic_state, open_dark = {}, set()
+    kinematic_state, open_dark = {}, {}
     next_frame = None
     for cycle in simulate.run(ticks, params):
         tracks, now = cycle["tracks"], cycle["poll_time"]
@@ -108,13 +108,12 @@ def run(start, end, step_s=6.0, inject_kind=None, target=None, region=None):
              "last_adsb_alt_m": t.last_adsb_alt_m}
             for t in tracks.values()
         ]
-        hits = detectors.went_dark(snapshot, now, silence, recency)
-        for h in hits:
-            if h["track_id"] not in open_dark:
-                alerts.append({"t": now.timestamp(), "track_id": h["track_id"],
-                               "external_id": h["external_id"], "kind": "went_dark",
-                               "metric": round(h["metric"], 1)})
-        open_dark = {h["track_id"] for h in hits}
+        new_dark, _, open_dark = detectors.went_dark_episodes(
+            snapshot, now, open_dark, silence, recency)
+        for h in new_dark:
+            alerts.append({"t": now.timestamp(), "track_id": h["track_id"],
+                           "external_id": h["external_id"], "kind": "went_dark",
+                           "metric": round(h["metric"], 1)})
         detected, _, kinematic_state = detectors.kinematic_inconsistency(
             cycle["events"], kinematic_state)
         for a in detected:

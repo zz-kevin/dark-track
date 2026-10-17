@@ -33,19 +33,68 @@ class WentDarkTest(unittest.TestCase):
         self.assertEqual(detectors.went_dark_thresholds(45), (67.5, 58.5))
 
 
+class WentDarkEpisodeTest(unittest.TestCase):
+    """One dropout, one alert -- even when the radar contact goes briefly
+    stale mid-episode (routine at 45 s cadence with 10% radar dropout)."""
+
+    def _track(self, last_adsb, last_radar):
+        return {"track_id": 1, "external_id": "YETI45", "adsb_hits": 20,
+                "last_adsb_at": T0 + timedelta(seconds=last_adsb),
+                "last_radar_at": T0 + timedelta(seconds=last_radar),
+                "last_adsb_alt_m": 7925.0}
+
+    def _step(self, now_s, tracks, state):
+        return detectors.went_dark_episodes(tracks, T0 + timedelta(seconds=now_s), state, 68, 58)
+
+    def test_radar_gap_mid_episode_does_not_realert(self):
+        state, alerts = {}, 0
+        # ADS-B stops at 0 s; radar at 45, 90, (dropped 135), 180, 225 s.
+        for now, radar in [(70, 45), (95, 90), (150, 90), (185, 180), (230, 225)]:
+            new, resolved, state = self._step(now, [self._track(0, radar)], state)
+            alerts += len(new)
+            self.assertEqual(resolved, [])
+        self.assertEqual(alerts, 1)
+
+    def test_resolves_when_adsb_resumes(self):
+        _, _, state = self._step(70, [self._track(0, 45)], {})
+        new, resolved, state = self._step(100, [self._track(98, 90)], state)
+        self.assertEqual((new, resolved, state), ([], [1], {}))
+
+    def test_resolves_when_track_retired(self):
+        _, _, state = self._step(70, [self._track(0, 45)], {})
+        new, resolved, state = self._step(300, [], state)
+        self.assertEqual((resolved, state), ([1], {}))
+
+
 class KinematicTest(unittest.TestCase):
-    def _event(self, i, normalized):
-        return {"track_id": 1, "source": "adsb", "observed_at": T0 + timedelta(seconds=i),
+    def _event(self, i, normalized, source="adsb"):
+        return {"track_id": 1, "source": source, "observed_at": T0 + timedelta(seconds=i),
                 "residual_m": normalized * 100.0, "innovation_std_m": 100.0}
 
-    def test_needs_consecutive_and_fires_once(self):
-        state = {}
-        fired = []
-        for i, n in enumerate([5, 1, 5, 5, 5, 1]):
+    def _run(self, seq):
+        state, fired = {}, []
+        for i, (n, src) in enumerate(seq):
             detected, resolved, state = detectors.kinematic_inconsistency(
-                [self._event(i, n)], state, sigma_mult=4.0, consecutive=2)
+                [self._event(i, n, src)], state, sigma_mult=4.0, consecutive=2)
             fired.append((len(detected), len(resolved)))
-        self.assertEqual(fired, [(0, 0), (0, 0), (0, 0), (1, 0), (0, 0), (0, 1)])
+        return fired
+
+    def test_needs_consecutive_from_one_source_and_fires_once(self):
+        a = "adsb"
+        self.assertEqual(self._run([(5, a), (1, a), (5, a), (5, a), (5, a), (1, a), (1, a)]),
+                         [(0, 0), (0, 0), (0, 0), (1, 0), (0, 0), (0, 0), (0, 1)])
+
+    def test_one_maneuver_is_one_alert_across_sources_and_brief_lulls(self):
+        """The old per-(track, source) episodes re-alerted: once per
+        source, and again after any single normal update."""
+        seq = [(5, "adsb"), (5, "adsb"), (5, "radar"), (5, "radar"), (1, "adsb"),
+               (5, "adsb"), (5, "adsb"), (1, "radar"), (5, "radar"), (5, "radar")]
+        self.assertEqual(sum(d for d, _ in self._run(seq)), 1)
+
+    def test_new_episode_after_it_resolved(self):
+        a = "adsb"
+        fired = self._run([(5, a), (5, a), (1, a), (1, a), (5, a), (5, a)])
+        self.assertEqual([d for d, _ in fired], [0, 1, 0, 0, 0, 1])
 
 
 class InjectTest(unittest.TestCase):
