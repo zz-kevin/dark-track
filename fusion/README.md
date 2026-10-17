@@ -48,8 +48,8 @@ Add `--region nyc|gulf` if both pollers ran during the window. `bench.py`
 writes to `dark_track_bench` (created if missing), never the live tables.
 
 **Accuracy** (aircraft with >= 90% of radar contacts on their own track,
-within 300 m, within 5 s), on validation windows: Gulf 95.1% / 97.5%,
-NYC 87.8% (97.4% airborne -- the gap is taxiing traffic). Every window,
+within 300 m, within 5 s), on validation windows: Gulf 98.5% / 97.1%,
+NYC 81.2% (93.0% airborne -- the gap is taxiing traffic). Every window,
 and the failure analysis, in [`../docs/FUSION.md`](../docs/FUSION.md).
 
 **Throughput** (Gulf 2026-10-14 06:15-06:30, 0.25s poll):
@@ -60,8 +60,9 @@ and the failure analysis, in [`../docs/FUSION.md`](../docs/FUSION.md).
 | 2 | 228 / 259 | 30 ms | 241 / 312 ms | 100% |
 | 4 | 456 / 521 | 37 ms | 248 / 352 ms | 100% |
 
-(Re-run after the likelihood cost, 4 copies: cycle p95 40 ms, tick p95
-250 ms / max 310 ms, 100% under 500 ms.)
+(Re-run after the likelihood cost and again after the velocity
+measurement, 4 copies: cycle p95 40 ms, tick p95 249 ms / max 310 ms,
+100% under 500 ms.)
 
 Before this round (3s poll, a connection per upserted track, per-pair
 gating) the 1-copy run had cycle p95 969 ms and 10% of ticks under
@@ -82,6 +83,8 @@ interval, which no fusion change can affect.
 - [x] Likelihood (Mahalanobis + log det S) assignment cost and 2.5x
       staleness gate, from tracing held-out went-dark misses; scored on
       untouched validation windows (docs/FUSION.md, anomaly/README.md).
-- [ ] Next: ADS-B velocity as a filter measurement (pins velocity, so
-      turns and 45s predictions track better); ground-traffic
-      association at NYC.
+- [x] ADS-B velocity as a filter measurement (airborne), ADS-B position
+      noise 50 m; validated on fresh windows (docs/FUSION.md).
+- [ ] Next: ground-traffic association at NYC -- most swaps are
+      between aircraft inside two radar sigmas, so expect limited gains;
+      OpenSky's position/velocity time offset during turns.

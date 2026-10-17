@@ -27,15 +27,17 @@ it's generated from real truth data.
 Status as of 2026-10-15 — measured, with the commands to reproduce in
 each module's README.
 
-| Criterion | Target | Measured | |
+| Criterion | Target | Measured on validation windows | |
 |---|---|---|---|
-| Fusion accuracy | 90% of aircraft | Gulf 95.1–97.5%; NYC 87.8% (97.4% airborne) — validation windows | met on Gulf; NYC **just short**, all of it ground traffic |
-| Went-dark false alarms | < 5% on held-out | 0.0–1.4% (3 validation windows) | met |
-| Went-dark detection | within silence + 1 interval | 89.9–94.2% of injected events (validation) | see anomaly/README.md |
+| Fusion accuracy | 90% of aircraft | Gulf 97.1–98.5%; NYC 81.2% (93.0% airborne) | met on Gulf and NYC airborne; **not NYC all-traffic** (ground traffic) |
+| Went-dark false alarms | < 5% on held-out | 0.0% (all 10 scored windows) | met |
+| Went-dark detection | within silence + 1 interval | 90.0–96.5% of injected events | see anomaly/README.md |
 | Throughput | 150 tracks, < 500 ms | 100% of ticks < 500 ms at ~510 concurrent tracks (max 310 ms) | met |
 
-"Validation" = windows nothing was tuned or diagnosed on: two Gulf
-captures from other days and a fresh NYC capture (2026-10-15).
+"Validation" = windows scored once after the code was frozen and never
+used to choose anything: two Gulf captures and a fresh NYC capture
+(2026-10-16). Every window, including development ones, is in
+anomaly/README.md and docs/FUSION.md.
 
 - **Fusion accuracy:** correctly associate the same real-world aircraft
   across both sources within `300` meters and `5` seconds, for `90`% of
@@ -46,10 +48,10 @@ captures from other days and a fresh NYC capture (2026-10-15).
   is correct if it updated its own aircraft's track, the fused position
   right after is within 300 m of the aircraft's true position, and it was
   fused within 5 s; an aircraft counts if at least 90% of its contacts
-  are correct. Gulf passes (95.1–97.5% on validation windows). NYC comes
-  in at 87.8% on its validation capture: airborne aircraft pass at 97.4%,
-  and the shortfall is ground traffic swapping contacts between taxiing
-  neighbours. See docs/FUSION.md.
+  are correct. Gulf passes (97.1–98.5% on validation windows). NYC
+  airborne passes (93.0%); NYC all-traffic doesn't (81.2%): taxiing
+  aircraft swap radar contacts, and most of those swaps are between
+  aircraft closer together than the radar can resolve. See docs/FUSION.md.
 - **Anomaly detection:** flag an injected "went dark" event within the
   ADS-B silence threshold plus one update interval of it occurring
   (~`41` s at 10s polling), with under `5`% of aircraft raising a false
@@ -62,7 +64,7 @@ captures from other days and a fresh NYC capture (2026-10-15).
   unreachable by construction (measured: 6% recall). The target now
   scales with the feed's cadence instead of assuming one.
 
-  _Measured on validation data:_ 0.0–1.4% false-positive rate, 89.9–94.2%
+  _Measured on validation data:_ 0.0% false-positive rate, 90.0–96.5%
   of injected events flagged within the budget (two Gulf windows and a
   fresh NYC capture, none used for tuning).
 - **Throughput:** sustain fusion + anomaly detection for at least `150`

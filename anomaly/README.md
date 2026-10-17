@@ -30,51 +30,81 @@ ADS-B interval.
 - **Induced** -- extra alerts in injected runs that weren't in the
   background, per run: side effects of the injection itself.
 
-### Current (2026-10-15)
+### Current (2026-10-16)
 
-Three kinds of window:
+Window roles:
 
-- **validation** -- never looked at until the code was frozen: two Gulf
-  windows from other days, and a fresh NYC capture made for this
-  (2026-10-15, its radar carries exact ground truth).
-- **held-out** -- captured after commit 6fa89bb froze the thresholds;
-  one of them (Oct 14) was then used to diagnose the misses below, so
-  it's development data now.
-- **tuning** -- what the earlier fixes were developed on.
+- **validation** -- scored once, after the code was frozen, and never
+  used to choose anything: Gulf 2026-10-13 20:00, Gulf 2026-10-12 20:30,
+  and a second fresh NYC capture (2026-10-16 01:30). These are the
+  numbers to quote.
+- **validation, earlier round** -- the previous change's validation
+  windows (NYC 2026-10-15, Gulf 2026-10-12 05:00, Gulf 2026-10-11).
+  Not used to choose anything in this round either, but seen before.
+- **development** -- used to diagnose and choose: Gulf 2026-10-14,
+  Gulf 2026-10-13 05:30, and the original tuning windows (Gulf and NYC
+  2026-10-10).
+
+**Went-dark** (budget = silence + one interval: 41s NYC, 112s Gulf):
 
 | Window | Role | Interval | Recall | Mean latency | False-positive rate | Induced / run |
 |---|---|---|---|---|---|---|
-| NYC 2026-10-15 22:50-23:20 UTC | validation | 11s | **91.1%** (205/225) | 25.3s | **0.0%** (0/282) | 2.37 |
-| Gulf 2026-10-12 05:00-05:15 UTC | validation | 45s | **89.9%** (107/119) | 48.6s | **0.0%** (0/121) | 0.97 |
-| Gulf 2026-10-11 05:45-06:00 UTC | validation | 45s | **94.2%** (131/139) | 45.4s | **1.4%** (2/140) | 0.91 |
-| Gulf 2026-10-13 05:30-05:45 UTC | held-out | 45s | 93.8% (122/130) | 41.9s | 0.0% (0/132) | 0.66 |
-| Gulf 2026-10-14 06:15-06:30 UTC | held-out, then dev | 45s | 94.7% (124/131) | 49.5s | 0.7% (1/134) | 0.55 |
-| Gulf 2026-10-10 02:01-02:16 UTC | tuning | 45s | 98.4% (122/124) | 44.3s | 0.8% (1/125) | 0.80 |
-| NYC 2026-10-10 02:38-03:08 UTC | tuning | 11s | 88.3% (98/111) | 25.6s | 0.0% (0/150) | 1.97 |
+| NYC 2026-10-16 01:30-02:00 UTC | validation | 11s | **90.0%** (135/150) | 26.6s | **0.0%** (0/189) | 2.32 |
+| Gulf 2026-10-13 20:00-20:15 UTC | validation | 45s | **93.5%** (101/108) | 45.9s | **0.0%** (0/108) | 1.10 |
+| Gulf 2026-10-12 20:30-20:45 UTC | validation | 45s | **96.5%** (111/115) | 50.3s | **0.0%** (0/115) | 0.94 |
+| NYC 2026-10-15 22:50-23:20 UTC | validation, earlier | 11s | 91.6% (206/225) | 25.3s | 0.0% (0/282) | 2.38 |
+| Gulf 2026-10-12 05:00-05:15 UTC | validation, earlier | 45s | 90.8% (108/119) | 48.7s | 0.0% (0/121) | 1.01 |
+| Gulf 2026-10-11 05:45-06:00 UTC | validation, earlier | 45s | 94.2% (131/139) | 45.4s | 0.0% (0/140) | 0.88 |
+| Gulf 2026-10-13 05:30-05:45 UTC | development | 45s | 94.6% (123/130) | 42.4s | 0.0% (0/132) | 0.65 |
+| Gulf 2026-10-14 06:15-06:30 UTC | development | 45s | 95.4% (125/131) | 49.5s | 0.0% (0/134) | 0.52 |
+| Gulf 2026-10-10 02:01-02:16 UTC | development | 45s | 97.6% (121/124) | 44.5s | 0.0% (0/125) | 0.78 |
+| NYC 2026-10-10 02:38-03:08 UTC | development | 11s | 90.1% (100/111) | 25.7s | 0.0% (0/150) | 2.00 |
 
-Went-dark only; budget is silence + one interval (41s NYC, 112s Gulf).
-**On data nothing was tuned on: 89.9-94.2% recall, 0.0-1.4% false
-alarms -- docs/PROBLEM.md's < 5% target met on all three.**
+**90-96.5% recall on the validation windows, and no false went-dark
+alarm on ordinary traffic in any of the ten** (docs/PROBLEM.md target:
+under 5%).
 
-Kinematic (secondary signal, no target):
+**Kinematic** (budget = 3 update intervals; maneuver direction seeded
+per aircraft, so these reproduce exactly):
 
 | Window | Role | Recall | False-positive rate | Induced / run |
 |---|---|---|---|---|
-| NYC 2026-10-15 | validation | 49.5% (137/277) | 1.1% (3/282) | 2.86 |
-| Gulf 2026-10-12 | validation | 49.6% (59/119) | 0.8% (1/121) | 0.48 |
-| Gulf 2026-10-11 | validation | 17.5% (24/137) | 0.0% (0/140) | 0.54 |
-| Gulf 2026-10-13 | held-out | 24.4% (31/127) | 2.3% (3/132) | 0.69 |
-| Gulf 2026-10-14 | held-out, then dev | 26.0% (34/131) | 3.0% (4/134) | 0.52 |
-| Gulf 2026-10-10 | tuning | 25.6% (31/121) | 1.6% (2/125) | 0.56 |
-| NYC 2026-10-10 | tuning | 44.5% (65/146) | 4.0% (6/150) | 2.58 |
+| NYC 2026-10-16 | validation | 35.6% (67/188) | 1.1% (2/189) | 2.88 |
+| Gulf 2026-10-13 20:00 | validation | 78.2% (79/101) | 0.0% (0/108) | 0.24 |
+| Gulf 2026-10-12 20:30 | validation | 91.1% (102/112) | 2.6% (3/115) | 0.12 |
+| NYC 2026-10-15 | validation, earlier | 43.0% (119/277) | 0.7% (2/282) | 2.90 |
+| Gulf 2026-10-12 05:00 | validation, earlier | 86.6% (103/119) | 0.8% (1/121) | 0.15 |
+| Gulf 2026-10-11 | validation, earlier | 81.0% (111/137) | 0.0% (0/140) | 0.16 |
+| Gulf 2026-10-13 05:30 | development | 85.0% (108/127) | 0.8% (1/132) | 0.15 |
+| Gulf 2026-10-14 | development | 82.4% (108/131) | 0.7% (1/134) | 0.14 |
+| Gulf 2026-10-10 | development | 77.7% (94/121) | 0.0% (0/125) | 0.22 |
+| NYC 2026-10-10 | development | 34.9% (51/146) | 1.3% (2/150) | 2.70 |
 
-It swings 17-50% between windows and stays under 5% false alarms, so
-it's worth surfacing when it fires and not something to claim coverage
-on. The drop from the previous 59% is the injection getting more
-realistic (the target's radar now moves too), not the detector getting
-worse -- see below.
+Kinematic went from a weak secondary signal (15-50%) to 78-91% on Gulf
+once fusion measures ADS-B velocity: a 2g maneuver now shows up as a
+velocity the filter believes, instead of a position it partly writes
+off as noise. NYC stays at 35-43% -- with 11s updates the deviation
+has to clear 4 sigma within 33s, and approach traffic turns all the
+time. Still no stated target; false alarms under 3% everywhere.
 
-### What fixed the held-out misses
+### What changed this round
+
+ADS-B speed/track became a filter measurement (airborne fixes only),
+and ADS-B position noise went 20 m -> 50 m to absorb OpenSky timestamp
+jitter (docs/FUSION.md "State estimation"). Chosen from a 5-config grid
+on the development windows, frozen, then scored against the previous
+config on the three validation windows:
+
+| Validation window | Went-dark | Went-dark FP | Kinematic | Kinematic FP |
+|---|---|---|---|---|
+| NYC 2026-10-16 | 89.3% -> 90.0% | 0.0% -> 0.0% | 40.4% -> 36.2% | 3.7% -> 1.1% |
+| Gulf 2026-10-13 20:00 | 90.7% -> 93.5% | 2.8% -> 0.0% | 14.9% -> 73.3% | 1.9% -> 0.0% |
+| Gulf 2026-10-12 20:30 | 95.7% -> 96.5% | 0.0% -> 0.0% | 25.9% -> 92.9% | 4.3% -> 2.6% |
+
+(That comparison ran before the maneuver direction was seeded, so its
+kinematic figures differ by a few points from the table above.)
+
+### What fixed the held-out misses (previous round)
 
 On the Oct 14 window the committed code scored 84.0% (89.2% on Oct 13).
 Of its 21 misses, 20 had radar contacts for minutes after the dropout
@@ -111,7 +141,8 @@ Each row changes one thing from the row above (went-dark, tuning windows).
 | + target = silence + 1 interval; FP counted once on clean traffic | 78.0% / 13.3% | 93.4% / 0.8% |
 | + went-dark ignores ground traffic | 86.6% / 0.0% | 94.2% / 0.8% |
 | + one region per replay, time-sliced association (re-measured) | 87.4% / 0.0% | 91.9% / 0.8% |
-| + likelihood assignment cost, 2.5x staleness gate | **88.3% / 0.0%** | **98.4% / 0.8%** |
+| + likelihood assignment cost, 2.5x staleness gate | 88.3% / 0.0% | 98.4% / 0.8% |
+| + ADS-B velocity measured, 50 m ADS-B position noise | **90.1% / 0.0%** | **97.6% / 0.0%** |
 
 Kinematic, Gulf tuning window: 0% -> 59.2% after replacing the injected
 400 m/tick sideways ramp (a constant velocity the filter just learned)
@@ -153,7 +184,4 @@ to flag and not what a real maneuver looks like.
 - **The injected 2g maneuver is a sustained push in one direction** --
   displacement grows as t^2 without bound, unlike a real turn. Fine as a
   "can the detector see it" test; not a model of real flight.
-- **Kinematic is insensitive at 45s cadence.** The filter's own
-  prediction spread over 45s is ~3 km, so a 2g deviation needs most of
-  an interval to clear 4 sigma, and the filter partly absorbs it after
-  the first update.
+- **Kinematic at NYC cadence stays at 35-43%** -- see above.

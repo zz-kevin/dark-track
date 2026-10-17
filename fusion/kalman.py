@@ -68,15 +68,24 @@ class KalmanFilter:
     def predict(self, dt):
         self.x, self.P = self.peek_predict(dt)
 
-    def update(self, z, r_std):
+    def update(self, z, r_std, v=None, rv_std=None):
         """z is (x, y) meters. r_std is this measurement's position noise
-        std dev (meters) -- small for ADS-B, large for radar."""
-        R = np.diag([r_std ** 2, r_std ** 2])
-        y = np.array(z) - H @ self.x
-        S = H @ self.P @ H.T + R
-        K = self.P @ H.T @ np.linalg.inv(S)
+        std dev (meters) -- small for ADS-B, large for radar. v, if given,
+        is a measured (vx, vy) m/s with std dev rv_std -- ADS-B reports
+        ground speed and track alongside position."""
+        if v is None:
+            Hm = H
+            R = np.diag([r_std ** 2, r_std ** 2])
+            z = np.array(z)
+        else:
+            Hm = np.eye(STATE_DIM)
+            R = np.diag([r_std ** 2, r_std ** 2, rv_std ** 2, rv_std ** 2])
+            z = np.array([z[0], z[1], v[0], v[1]])
+        y = z - Hm @ self.x
+        S = Hm @ self.P @ Hm.T + R
+        K = self.P @ Hm.T @ np.linalg.inv(S)
         self.x = self.x + K @ y
-        self.P = (np.eye(STATE_DIM) - K @ H) @ self.P
+        self.P = (np.eye(STATE_DIM) - K @ Hm) @ self.P
         # S is the innovation covariance -- the actual, dt-aware spread the
         # innovation y should have under the process+measurement model
         # (grows with elapsed dt via process_noise, unlike a fixed r_std).
@@ -85,7 +94,7 @@ class KalmanFilter:
         # residuals -- anomaly/detectors.py's kinematic_inconsistency --
         # compare against the filter's real uncertainty, not just R.
         self.last_innovation_std_m = float(math.sqrt(S[0, 0] + S[1, 1]))
-        return y  # innovation, for residual/QC tracking
+        return y[:2]  # position innovation, for residual/QC tracking
 
     @property
     def position(self):

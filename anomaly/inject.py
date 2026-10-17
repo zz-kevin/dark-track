@@ -28,6 +28,19 @@ def _offset_latlon(lat, lon, north_m, east_m):
     return lat + dlat, lon + dlon
 
 
+def _accelerated_velocity(tick, north_dir, east_dir, dv):
+    """Reported speed/heading after adding dv m/s along (north_dir,
+    east_dir) -- so a maneuver's ADS-B velocity agrees with its positions
+    (fusion measures ADS-B velocity, engine.ADSB_VEL_STD_MPS)."""
+    v, hdg = tick.get("velocity_mps"), tick.get("heading_deg")
+    if v is None or hdg is None:
+        return {}
+    ve = v * math.sin(math.radians(hdg)) + east_dir * dv
+    vn = v * math.cos(math.radians(hdg)) + north_dir * dv
+    return {"velocity_mps": math.hypot(ve, vn),
+            "heading_deg": math.degrees(math.atan2(ve, vn)) % 360.0}
+
+
 def inject_went_dark(ticks, external_id, cutoff_fraction=0.5):
     """Drops `external_id`'s ADS-B ticks after a cutoff timestamp chosen at
     cutoff_fraction through that aircraft's span in the window. Radar
@@ -74,7 +87,9 @@ def inject_kinematic_jump(ticks, external_id, cutoff_fraction=0.5,
     lateral acceleration of lateral_accel_mps2 (default ~2g, far outside
     what an airliner does and ~7x fusion's accel_std process noise).
 
-    Displacement grows with *time*, not tick count, so the same maneuver
+    Reported speed/heading change to match (velocity grows by a * t), so
+    the maneuver is self-consistent for a filter that measures ADS-B
+    velocity. Displacement grows with *time*, not tick count, so the same maneuver
     is injected at any poll cadence. (The previous model added a fixed
     400m per tick: a constant sideways *velocity*, which the
     constant-velocity filter simply learned as a new velocity after a
@@ -91,6 +106,9 @@ def inject_kinematic_jump(ticks, external_id, cutoff_fraction=0.5,
 
     Returns (modified_ticks, ground_truth) where ground_truth is
     {"external_id", "kind": "kinematic_inconsistency", "injected_at"}.
+
+    `seed` fixes the maneuver's direction (harness.py seeds it per
+    aircraft, so a sweep is reproducible).
 
     Raises ValueError if `external_id` has fewer than 3 ADS-B ticks after
     the chosen cutoff (too few to form a "consecutive" streak at all).
@@ -131,7 +149,8 @@ def inject_kinematic_jump(ticks, external_id, cutoff_fraction=0.5,
             new_lat, new_lon = _offset_latlon(
                 t["lat"], t["lon"], north_dir * offset_m, east_dir * offset_m
             )
-            t = {**t, "lat": new_lat, "lon": new_lon}
+            t = {**t, "lat": new_lat, "lon": new_lon, **_accelerated_velocity(
+                t, north_dir, east_dir, lateral_accel_mps2 * elapsed)}
         modified.append(t)
 
     ground_truth = {

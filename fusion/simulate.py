@@ -28,7 +28,7 @@ DEFAULT_PARAMS = dict(
     gate_dist_m=800.0,
     gate_staleness_s=30.0,
     track_ttl_s=120.0,
-    r_adsb_std_m=20.0,
+    r_adsb_std_m=engine.R_ADSB_STD_M,
     r_radar_std_m=150.0,
 )
 
