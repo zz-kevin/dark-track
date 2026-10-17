@@ -36,13 +36,15 @@ Window roles:
 
 - **validation** -- scored once, after the code was frozen, never used
   to choose anything: Gulf 2026-10-12 04:00, 2026-10-13 02:00,
-  2026-10-14 04:30. These are the numbers to quote.
+  2026-10-14 04:30, and a third fresh NYC capture's second half
+  (2026-10-16 18:08, daytime). These are the numbers to quote.
 - **validation, earlier** -- earlier rounds' validation windows,
   including both fresh NYC captures. Not used to choose anything since,
   but seen before.
 - **development** -- used to diagnose and choose: the Gulf morning
   capture's 04:10 and 04:45 windows (where the IMM, altitude and the
-  FRS91 altitude glitch were investigated), Gulf 2026-10-14 06:15,
+  FRS91 altitude glitch were investigated), the NYC daytime capture's
+  first half (2026-10-16 17:52, the velocity time-offset test), Gulf 2026-10-14 06:15,
   2026-10-13 05:30, and the original tuning windows (2026-10-10).
 
 **Scoring change (2026-10-16):** a went-dark injection is only scored
@@ -59,6 +61,7 @@ validation windows it gave 92.9-95.5% where this gives 95.5-97.1%).
 
 | Window | Role | Interval | Recall | Mean latency | False-positive rate | Induced / run | Coverage gaps skipped |
 |---|---|---|---|---|---|---|---|
+| NYC 2026-10-16 18:08-18:23 UTC | validation | 11s | **98.3%** (119/121) | 27.1s | **0.0%** (0/165) | 1.44 | 2 |
 | Gulf 2026-10-12 04:00-04:15 UTC | validation | 45s | **98.1%** (106/108) | 49.8s | **0.0%** (0/111) | 0.67 | 2 |
 | Gulf 2026-10-13 02:00-02:15 UTC | validation | 46s | **94.2%** (98/104) | 51.4s | **0.0%** (0/106) | 0.63 | 0 |
 | Gulf 2026-10-14 04:30-04:45 UTC | validation | 46s | **96.9%** (94/97) | 52.9s | **0.0%** (0/102) | 0.60 | 4 |
@@ -77,9 +80,10 @@ validation windows it gave 92.9-95.5% where this gives 95.5-97.1%).
 | Gulf 2026-10-13 05:30-05:45 UTC | development | 45s | **97.6%** (123/126) | 42.4s | **0.0%** (0/132) | 0.67 | 4 |
 | Gulf 2026-10-14 06:15-06:30 UTC | development | 45s | **96.9%** (125/129) | 49.5s | **0.0%** (0/134) | 0.53 | 2 |
 | Gulf 2026-10-10 02:01-02:16 UTC | development | 45s | **97.6%** (121/124) | 44.5s | **0.0%** (0/125) | 0.78 | 0 |
+| NYC 2026-10-16 17:52-18:07 UTC | development | 11s | **98.4%** (124/126) | -- | **0.0%** | 1.66 | -- |
 | NYC 2026-10-10 02:38-03:08 UTC | development | 11s | **96.0%** (95/99) | 25.8s | **0.0%** (0/150) | 2.15 | 12 |
 
-**94.2-98.1% recall on the validation windows, no false alarms on
+**94.2-98.3% recall on the validation windows, no false alarms on
 ordinary traffic** (docs/PROBLEM.md target: under 5%; 0-2% across all
 19 windows). The low end is the development windows from the Gulf
 morning capture (85.7%, 88.4%): holding patterns sampled every 45 s,
@@ -91,6 +95,7 @@ per aircraft, so these reproduce exactly):
 
 | Window | Role | Recall | False-positive rate | Induced / run |
 |---|---|---|---|---|
+| NYC 2026-10-16 18:08-18:23 UTC | validation | 61.5% (99/161) | 0.0% (0/165) | 1.60 |
 | Gulf 2026-10-12 04:00-04:15 UTC | validation | 89.7% (96/107) | 0.0% (0/111) | 0.10 |
 | Gulf 2026-10-13 02:00-02:15 UTC | validation | 89.5% (94/105) | 0.0% (0/106) | 0.10 |
 | Gulf 2026-10-14 04:30-04:45 UTC | validation | 83.0% (83/100) | 0.0% (0/102) | 0.19 |
@@ -109,12 +114,14 @@ per aircraft, so these reproduce exactly):
 | Gulf 2026-10-13 05:30-05:45 UTC | development | 85.0% (108/127) | 0.8% (1/132) | 0.15 |
 | Gulf 2026-10-14 06:15-06:30 UTC | development | 82.4% (108/131) | 0.7% (1/134) | 0.14 |
 | Gulf 2026-10-10 02:01-02:16 UTC | development | 77.7% (94/121) | 0.0% (0/125) | 0.22 |
+| NYC 2026-10-16 17:52-18:07 UTC | development | 65.0% (115/177) | 0.0% | 1.23 |
 | NYC 2026-10-10 02:38-03:08 UTC | development | 34.9% (51/146) | 1.3% (2/150) | 2.70 |
 
 Kinematic is a strong secondary signal on Gulf traffic (76-91%, 83-90%
 on the validation windows) since fusion measures ADS-B velocity, and a
 weak one at NYC (35-43%): with 11s updates a deviation has to clear 4
-sigma within 33s, and approach traffic turns all the time. No stated
+sigma within 33s, and approach traffic turns all the time (61.5-65% on
+the daytime NYC capture, which has more cruising traffic). No stated
 target; false alarms under 3% everywhere.
 
 ### Velocity measurement (2026-10-16 round)

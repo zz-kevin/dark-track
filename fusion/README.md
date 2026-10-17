@@ -100,6 +100,8 @@ interval, which no fusion change can affect.
 - [x] Radar height error in radar_sim; altitude in association as an
       opt-in (fixed the holding-stack miss, neutral on six validation
       windows). Went-dark scoring no longer counts coverage gaps.
+- [x] Velocity time offset on NYC: no effect (NYC offsets median 0 s);
+      stays off.
 - [ ] Open: same-level formations (FRS41/FRS42) -- inside radar's
       resolution in every dimension; nothing in the current sensor model
       separates them.
