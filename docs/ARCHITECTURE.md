@@ -226,6 +226,19 @@ Record real decisions here as they're made, in the format:
 > including a second fresh NYC capture: better or equal on every metric
 > except NYC kinematic recall (40% -> 36%, false alarms 3.7% -> 1.1%).
 
+> **Decision:** Keep the constant-velocity filter; the IMM filter
+> (`fusion/imm.py`) stays as a tested, documented opt-in.
+> **Alternatives considered:** IMM (constant velocity + coordinated
+> turn) as the default, aimed at transponder dropouts during turns.
+> **Why:** on the window it was built for, went-dark recall didn't move
+> (79.6% -> 78.6%) and kinematic recall fell from 78% to 1-4%, because
+> a filter that explains maneuvers stops flagging them. The traced
+> misses are holding patterns sampled every 45 s, which no motion model
+> predicts; altitude would separate the stack, but needs a realistic
+> radar height error in the simulator first. Kept in the repo because
+> the negative result is the finding, and the mixture-likelihood
+> association it needed is exact for one model.
+
 > **Decision:** `api/` is a stdlib `http.server`, read-only, serving
 > `web/` from the same origin; replays re-run fusion + detection in
 > memory per request (cached).

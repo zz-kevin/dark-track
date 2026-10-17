@@ -10,7 +10,12 @@ detector (weeks 10-11) will threshold on.
 
 import math
 
+from imm import IMMFilter
 from kalman import KalmanFilter
+
+# "cv": one constant-velocity Kalman filter per track. "imm": constant
+# velocity + coordinated turn, blended (imm.py).
+FILTER = "cv"
 
 
 class Track:
@@ -21,8 +26,8 @@ class Track:
         self.id = Track._next_id
         Track._next_id += 1
 
-        self.kf = KalmanFilter(x0, y0, accel_std, init_pos_var,
-                               init_vel_var=init_vel_var, v0=v0)
+        cls = IMMFilter if FILTER == "imm" else KalmanFilter
+        self.kf = cls(x0, y0, accel_std, init_pos_var, init_vel_var=init_vel_var, v0=v0)
         self.external_id = external_id
         # Watched military type (ingestion/aircraft_types.py), only ever
         # learned from identified ADS-B ticks -- see note_type().

@@ -65,6 +65,12 @@ class KalmanFilter:
         P_pred = F @ self.P @ F.T + process_noise(dt, self.accel_std)
         return x_pred, P_pred
 
+    def peek_predict_components(self, dt):
+        """[(weight, x, P)] -- the prediction as Gaussian components, the
+        form association scores against (imm.IMMFilter has one per model)."""
+        x, P = self.peek_predict(dt)
+        return [(1.0, x, P)]
+
     def predict(self, dt):
         self.x, self.P = self.peek_predict(dt)
 

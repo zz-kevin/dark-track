@@ -21,7 +21,8 @@ Design reasoning and rejected alternatives are in
 | `schema.sql` | `fused_tracks` (current picture) + `fused_track_events` (append-only update log) |
 | `db.py` | Reads `raw_ticks` (shared with `ingestion/`), writes the fused picture |
 | `geo.py` | lat/lon <-> local ENU meters, so the filter works in plain Euclidean space |
-| `kalman.py` | The per-track constant-velocity Kalman filter |
+| `kalman.py` | The per-track constant-velocity Kalman filter (the default) |
+| `imm.py` | Opt-in interacting-multiple-model filter (constant velocity + coordinated turn); measured, not used -- see docs/FUSION.md |
 | `track.py` | Wraps a filter with identity/recency bookkeeping + confidence heuristic |
 | `associate.py` | Gating + Hungarian assignment for anonymous ticks |
 | `engine.py` | Main loop tying it all together |
@@ -62,7 +63,9 @@ and the failure analysis, in [`../docs/FUSION.md`](../docs/FUSION.md).
 
 (Re-run after the likelihood cost and again after the velocity
 measurement, 4 copies: cycle p95 40 ms, tick p95 249 ms / max 310 ms,
-100% under 500 ms.)
+100% under 500 ms. After mixture-likelihood association, which predicts
+each track once per slice: cycle p95 50 ms, tick p95 259 ms / max
+331 ms, 100% under 500 ms.)
 
 Before this round (3s poll, a connection per upserted track, per-pair
 gating) the 1-copy run had cycle p95 969 ms and 10% of ticks under
@@ -89,6 +92,10 @@ interval, which no fusion change can affect.
       contact really is likelier under the other aircraft) -- closed as
       a sensor limit. Velocity time offset: recorded, measured worse on
       Gulf, off pending an NYC capture with `velocity_at`.
-- [ ] Next: interacting-multiple-model filter (constant velocity +
-      coordinated turn) for dropouts during turns -- the main source of
-      went-dark misses on Gulf morning traffic.
+- [x] Interacting-multiple-model filter (`imm.py`, opt-in): no gain on
+      the turn-dropout window and kinematic detection collapses, so the
+      default stays constant velocity. Association now scores per-model
+      mixtures (identical for one model). See docs/FUSION.md.
+- [ ] Next: radar altitude with a realistic height error in radar_sim,
+      then altitude in association -- what would separate holding
+      stacks and the remaining Gulf morning misses.
