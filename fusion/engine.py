@@ -109,7 +109,10 @@ def tick_from_row(row, source, r_std):
         "x": x,
         "y": y,
         "observed_at": row["observed_at"],
-        "r_std": r_std,
+        # A contact that reports its own accuracy (ingestion/radar_model.py:
+        # cross-range error grows with range) is weighted by it; otherwise
+        # the source's fixed figure.
+        "r_std": row.get("noise_std_m") or r_std,
         "source": source,
         "aircraft_type": row.get("aircraft_type"),
         "aircraft_variant": row.get("aircraft_variant"),

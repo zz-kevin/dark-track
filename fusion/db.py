@@ -135,7 +135,7 @@ def raw_ticks_since(source, since_id, bbox=None):
             f"""
             SELECT id, external_id, lat, lon, observed_at, aircraft_type,
                    aircraft_variant, velocity_mps, heading_deg, altitude_m,
-                   velocity_at, altitude_std_m
+                   velocity_at, altitude_std_m, noise_std_m
             FROM raw_ticks
             WHERE source = %s AND id > %s{where}
             ORDER BY id
@@ -144,7 +144,8 @@ def raw_ticks_since(source, since_id, bbox=None):
         )
         cols = ["id", "external_id", "lat", "lon", "observed_at",
                 "aircraft_type", "aircraft_variant", "velocity_mps",
-                "heading_deg", "altitude_m", "velocity_at", "altitude_std_m"]
+                "heading_deg", "altitude_m", "velocity_at", "altitude_std_m",
+                "noise_std_m"]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 

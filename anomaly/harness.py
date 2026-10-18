@@ -62,6 +62,7 @@ def _load_module(name, path):
 
 ingestion_db = _load_module("ingestion_db", INGESTION_DIR / "db.py")
 radar_truth = _load_module("radar_truth", INGESTION_DIR / "radar_truth.py")
+radar_model = _load_module("radar_model", INGESTION_DIR / "radar_model.py")
 regions = _load_module("regions", INGESTION_DIR / "regions.py")
 
 import inject  # noqa: E402
@@ -272,7 +273,7 @@ def sweep(kind, ticks, params, latency_budget_s, include_coverage_gaps=False):
           f"{len(background) / (len(candidates) * hours) if hours else 0:.2f} per aircraft-hour)")
     print(f"injection-induced false alarms: {len(induced)} over {n} runs "
           f"= {len(induced) / n if n else 0:.2f} per run")
-    return {"recall": recall, "latencies": latencies, "fpr": fpr, "n": n,
+    return {"recall": recall, "latencies": latencies, "fpr": fpr, "n": n, "results": results,
             "background_alerts": len(background), "induced": len(induced)}
 
 
@@ -297,6 +298,10 @@ def parse_args():
                              "own radar contacts can't reveal them (pre-2026-10-16 scoring)")
         sp.add_argument("--region", choices=sorted(regions.REGIONS), default=None,
                         help="required when the window holds more than one region's traffic")
+        sp.add_argument("--radar", choices=["stored", "model"], default="stored",
+                        help="model: replace the stored radar with ingestion/radar_model.py's "
+                             "(regenerated before anything is injected)")
+        sp.add_argument("--radar-seed", type=int, default=0)
         sp.add_argument("--latency-budget-s", type=float, default=None,
                         help="default: docs/PROBLEM.md's target scaled to the "
                              "window's cadence (see default_latency_budget)")
@@ -322,6 +327,8 @@ def main():
     if not ticks:
         print("no ticks in that window")
         return
+    if args.radar == "model":
+        ticks = radar_model.regenerate(ticks, args.region, args.radar_seed)
     params = scaled_params(ticks)
     budget = (args.latency_budget_s if args.latency_budget_s is not None
               else default_latency_budget(args.kind, params))

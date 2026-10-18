@@ -17,6 +17,11 @@ opensky_poll.py, and derives a second, degraded feed from them:
 Run this alongside opensky_poll.py (same DATABASE_URL). It only reads
 adsb ticks that arrive *after* it starts, so run opensky_poll.py first.
 
+--model realistic swaps the fixed noise and dropout for radar_model.py's
+radar: a site per region, accuracy that degrades with range, detection
+that falls off with range and below the horizon, and clutter. Each
+contact then records its own accuracy (noise_std_m) for fusion.
+
 Latency and dropout are simulated by writing `observed_at` in the future
 relative to the source tick's true time and by seeding the RNG, rather than
 literally sleeping per-tick — this keeps a replay of a fixed --seed run
@@ -31,6 +36,7 @@ import time
 from datetime import timedelta
 
 import db
+import radar_model
 
 EARTH_RADIUS_M = 6371000
 METERS_PER_DEG_LAT = 111320
@@ -87,36 +93,63 @@ def make_radar_row(adsb_row, noise_std_m, latency_min, latency_max, rng,
     }
 
 
+def realistic_contacts(rows, site, rng, clutter_from):
+    """radar_model contacts for `rows`, plus clutter from clutter_from (the
+    previous batch's last fix time) up to this batch's last. Returns
+    (contacts, undetected, last fix time)."""
+    contacts = [radar_model.contact(site, row, rng) for row in rows]
+    detected = [c for c in contacts if c is not None]
+    last = max(row["observed_at"] for row in rows)
+    if clutter_from is not None and last > clutter_from:
+        detected += radar_model.clutter(site, clutter_from,
+                                        (last - clutter_from).total_seconds(), rng)
+    return detected, len(contacts) - sum(c is not None for c in contacts), last
+
+
 def run(poll_seconds, dropout_prob, noise_std_m, latency_min, latency_max,
-        seed, since_id, height_noise_std_m):
+        seed, since_id, height_noise_std_m, model="simple", region=None):
     rng = random.Random(seed)
     cursor = since_id if since_id is not None else db.latest_id("adsb")
-    print(
-        f"Deriving synthetic radar contacts from adsb ticks after id={cursor}, "
-        f"every {poll_seconds}s (dropout={dropout_prob:.0%}, "
-        f"noise_std={noise_std_m}m, latency=[{latency_min},{latency_max}]s, "
-        f"seed={seed}). Ctrl+C to stop.\n"
-    )
+    site = radar_model.SITES[region] if region else None
+    clutter_from = None
+    if model == "realistic":
+        print(f"Deriving realistic radar contacts from adsb ticks after id={cursor}, "
+              f"every {poll_seconds}s ({site.name if site else 'site chosen from the data'}, "
+              f"seed={seed}). Ctrl+C to stop.\n")
+    else:
+        print(
+            f"Deriving synthetic radar contacts from adsb ticks after id={cursor}, "
+            f"every {poll_seconds}s (dropout={dropout_prob:.0%}, "
+            f"noise_std={noise_std_m}m, latency=[{latency_min},{latency_max}]s, "
+            f"seed={seed}). Ctrl+C to stop.\n"
+        )
     while True:
         try:
             new_rows = db.ticks_since("adsb", cursor)
             radar_rows = []
             dropped = 0
-            for row in new_rows:
-                cursor = row["id"]
-                if rng.random() < dropout_prob:
-                    dropped += 1
-                    continue
-                radar_rows.append(
-                    make_radar_row(row, noise_std_m, latency_min, latency_max, rng,
-                                   height_noise_std_m)
-                )
+            if model == "realistic":
+                if new_rows:
+                    cursor = new_rows[-1]["id"]
+                    site = site or radar_model.site_for(new_rows)
+                    radar_rows, dropped, clutter_from = realistic_contacts(
+                        new_rows, site, rng, clutter_from)
+            else:
+                for row in new_rows:
+                    cursor = row["id"]
+                    if rng.random() < dropout_prob:
+                        dropped += 1
+                        continue
+                    radar_rows.append(
+                        make_radar_row(row, noise_std_m, latency_min, latency_max, rng,
+                                       height_noise_std_m)
+                    )
             if new_rows:
                 if radar_rows:
                     db.insert_ticks(radar_rows)
                 print(
                     f"processed {len(new_rows)} adsb ticks -> "
-                    f"{len(radar_rows)} radar contacts, {dropped} dropped"
+                    f"{len(radar_rows)} radar contacts, {dropped} not detected"
                 )
         except Exception as e:
             print(f"radar_sim tick failed: {e}", file=sys.stderr)
@@ -143,6 +176,11 @@ def parse_args():
                     help="maximum simulated sensor latency, seconds")
     p.add_argument("--seed", type=int, default=None,
                     help="RNG seed for deterministic replay runs")
+    p.add_argument("--model", choices=["simple", "realistic"], default="simple",
+                    help="simple: fixed noise and dropout (the original). realistic: "
+                         "radar_model.py's site, range-dependent accuracy, horizon, clutter")
+    p.add_argument("--region", choices=sorted(radar_model.SITES), default=None,
+                    help="realistic: which region's radar site (default: from the data)")
     p.add_argument("--since-id", type=int, default=None,
                     help="resume from this adsb raw_ticks.id instead of "
                          "the current max (useful for backfilling)")
@@ -160,4 +198,6 @@ if __name__ == "__main__":
         seed=args.seed,
         since_id=args.since_id,
         height_noise_std_m=args.height_noise_std_m,
+        model=args.model,
+        region=args.region,
     )

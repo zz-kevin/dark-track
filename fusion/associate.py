@@ -52,6 +52,24 @@ UNKNOWN_ALT_STD = 3000.0
 # Chi-square, 2 degrees of freedom, 99.9%: a true match falls outside this
 # only 1 time in 1000 if the filter's covariance is honest.
 CHI2_GATE = 13.82
+# A contact is only given to a track it's likelier to have come from than
+# from anywhere at all: the track's predicted density at the contact has to
+# beat a uniform density over the radar's coverage (one 200 nmi radar,
+# ingestion/radar_model.py). A coasting track's covariance gate can open to
+# tens of km after a transponder pause, and a clutter contact inside it is
+# not evidence the radar still sees the aircraft. Only bites when the track
+# is very unsure (position std beyond ~8 km); 0 turns it off.
+BACKGROUND_DENSITY_PER_M2 = 1.0 / (np.pi * 370_000.0 ** 2)
+# Outer limit on the covariance gate, metres (None: no limit). A track
+# coasting through a transponder pause has a constant-velocity covariance
+# of ~12 km after 90 s -- far wider than its real error (p95 3.6 km at 45 s,
+# above) -- and the realistic radar's clutter landing 10-30 km away inside
+# that gate kept silent tracks "corroborated": every went-dark false alarm
+# it caused on the development windows. ~3x the measured p95.
+MAX_GATE_M = 10_000.0
+# On the x2, constants-dropped NLL scale the cost below uses.
+_BACKGROUND_NLL = (-2.0 * np.log(BACKGROUND_DENSITY_PER_M2) - 2.0 * np.log(2 * np.pi)
+                   if BACKGROUND_DENSITY_PER_M2 > 0 else np.inf)
 
 
 def associate(ticks, tracks, max_dist_m, max_staleness_s):
@@ -117,6 +135,8 @@ def associate(ticks, tracks, max_dist_m, max_staleness_s):
         det = sxx * syy - sxy ** 2
         mahal2 = (syy * dx ** 2 - 2 * sxy * dx * dy + sxx * dy ** 2) / det
         gated = fresh & ((dist <= max_dist_m) | (mahal2.min(0) <= CHI2_GATE))
+        if MAX_GATE_M is not None:
+            gated &= dist <= MAX_GATE_M
         alt_term = 0.0
         if USE_ALTITUDE and tick.get("alt") is not None:
             # Height as a third, independent dimension of the likelihood. A
@@ -138,6 +158,7 @@ def associate(ticks, tracks, max_dist_m, max_staleness_s):
             # over a 45s gap the blend drifts halfway back to straight
             # flight, while the turn component alone stays on the turn.
             nll = -2.0 * logsumexp(logW - 0.5 * (mahal2 + np.log(det)), axis=0) + alt_term
+            gated &= nll - alt_term <= _BACKGROUND_NLL
             cost[i, gated] = nll[gated]
         else:
             cost[i, gated] = dist[gated]

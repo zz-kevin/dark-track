@@ -109,6 +109,7 @@ map.on("zoomend", () => { zooming = false; });
 const markers = new Map(); // track id -> { marker, state, heading }
 const trailLayer = L.layerGroup().addTo(map);
 const darkLayer = L.layerGroup().addTo(map);
+const radarLayer = L.layerGroup().addTo(map); // realistic radar: site + coverage
 let selectedId = null;
 let followId = null;
 let fittedOnce = false;
@@ -731,6 +732,7 @@ const player = {
     let url = `/api/replay?${this.range()}&step=6`;
     if (kind && target) url += `&inject=${kind}&target=${encodeURIComponent(target)}`;
     else this.autoFollow = null;
+    url += `&radar=${$("radar-kind").value}`;
     $("load-replay").disabled = true;
     this.note("Loading the recording and checking every plane… (a few seconds)");
     try {
@@ -742,6 +744,7 @@ const player = {
       $("load-replay").disabled = false;
     }
     const d = this.data;
+    drawRadarSite(d.radar_site);
     const [startIso, region] = $("window-select").value.split("|");
     d.window = { start: startIso, region, aircraft: ($("window-select").selectedOptions[0]?.textContent.match(/(\d+) aircraft/) || [])[1] };
     d.t0 = d.frames[0].t;
@@ -985,6 +988,21 @@ document.addEventListener("keydown", (e) => {
 
 let mode = null;
 
+// The realistic radar's site and how far it reaches: planes outside the
+// ring (or low and far away, below the horizon) aren't seen by radar.
+function drawRadarSite(site) {
+  radarLayer.clearLayers();
+  if (!site) return;
+  L.circle([site.lat, site.lon], {
+    radius: site.max_range_m, color: "#8b949e", weight: 1, dashArray: "2 6",
+    fill: false, interactive: false,
+  }).addTo(radarLayer);
+  L.circleMarker([site.lat, site.lon], {
+    radius: 5, color: "#0d1117", weight: 1, fillColor: "#e6edf3", fillOpacity: 1,
+  }).bindTooltip(`${site.name}: sees out to ${Math.round(site.max_range_m / 1852)} nmi`)
+    .addTo(radarLayer);
+}
+
 function setMode(next) {
   if (next === mode) return;
   if (mode === "live") live.stop();
@@ -997,6 +1015,7 @@ function setMode(next) {
   select(null);
   clearTracks();
   darkPanel.reset();
+  radarLayer.clearLayers();
   if (next === "live") live.start();
   else player.enter();
 }

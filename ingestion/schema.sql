@@ -69,3 +69,9 @@ ALTER TABLE raw_ticks ADD COLUMN IF NOT EXISTS velocity_at TIMESTAMPTZ;
 -- simulated -- those carry the ADS-B altitude exactly, and replay tools
 -- add the same error at read time (fusion/simulate.py).
 ALTER TABLE raw_ticks ADD COLUMN IF NOT EXISTS altitude_std_m DOUBLE PRECISION;
+
+-- Radar only: the contact's own horizontal accuracy (std dev per axis, m)
+-- when the radar model reports one -- ingestion/radar_model.py, where
+-- cross-range error grows with range. Fusion uses it as the contact's R;
+-- NULL means the fixed figure (fusion --r-radar-std-m).
+ALTER TABLE raw_ticks ADD COLUMN IF NOT EXISTS noise_std_m DOUBLE PRECISION;
