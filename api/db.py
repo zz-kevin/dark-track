@@ -36,10 +36,7 @@ def current_tracks():
     with get_cursor() as cur:
         cur.execute(
             """
-            SELECT t.track_id, t.external_id, t.lat, t.lon, t.speed_mps,
-                   t.heading_deg, t.confidence, t.adsb_hits, t.radar_hits,
-                   t.last_adsb_at, t.last_radar_at, t.updated_at,
-                   t.aircraft_type, t.aircraft_variant, t.last_adsb_alt_m,
+            SELECT t.*,  -- every column there is: newer ones may be missing
                    COALESCE(array_agg(a.kind) FILTER (WHERE a.kind IS NOT NULL),
                             '{}') AS anomalies
             FROM fused_tracks t
@@ -48,7 +45,11 @@ def current_tracks():
             GROUP BY t.track_id
             """
         )
-        return _rows(cur)
+        rows = _rows(cur)
+        for r in rows:  # columns a not-yet-migrated database doesn't have
+            for key in ("last_adsb_lat", "last_adsb_lon", "position_std_m"):
+                r.setdefault(key, None)
+        return rows
 
 
 def track_history(track_id, limit=500):

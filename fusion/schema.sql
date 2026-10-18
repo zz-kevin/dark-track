@@ -50,3 +50,10 @@ ALTER TABLE fused_tracks ADD COLUMN IF NOT EXISTS aircraft_variant TEXT;
 -- reports none (aircraft on the ground). anomaly/'s went-dark detector
 -- ignores ground traffic -- see detectors.went_dark.
 ALTER TABLE fused_tracks ADD COLUMN IF NOT EXISTS last_adsb_alt_m DOUBLE PRECISION;
+
+-- Where the track's own transponder last put it (the "last confirmed
+-- position" once it goes dark), and its one-sigma position uncertainty per
+-- axis in metres. Shown by the web UI when following a dark aircraft.
+ALTER TABLE fused_tracks ADD COLUMN IF NOT EXISTS last_adsb_lat DOUBLE PRECISION;
+ALTER TABLE fused_tracks ADD COLUMN IF NOT EXISTS last_adsb_lon DOUBLE PRECISION;
+ALTER TABLE fused_tracks ADD COLUMN IF NOT EXISTS position_std_m DOUBLE PRECISION;
