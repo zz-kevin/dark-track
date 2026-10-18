@@ -58,7 +58,8 @@ class OutageTest(unittest.TestCase):
             if len(sleeps) > 40:
                 raise KeyboardInterrupt
 
-        stubs = dict(latest_raw_id=lambda source: 0, adsb_update_interval=lambda: 10.0,
+        stubs = dict(init_schema=lambda: None,
+                     latest_raw_id=lambda source: 0, adsb_update_interval=lambda: 10.0,
                      recent_center=lambda bbox=None: (25.0, 53.0), next_track_id=lambda: 1,
                      clear_fused_tracks=lambda: 0, recent_points=lambda: [(25.0, 53.0)],
                      raw_ticks_since=fake.raw_ticks_since, write_cycle=fake.write_cycle)
