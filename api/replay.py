@@ -132,10 +132,17 @@ def run(start, end, step_s=6.0, inject_kind=None, target=None, region=None):
                     meta[t.id]["type"] = aircraft_types.label(t.aircraft_type, t.aircraft_variant)
                 lat, lon = geo.to_latlon(*t.kf.position)
                 heading = t.heading_deg()
+                state = _state(t, now, silence, open_dark)
+                # Last confirmed (transponder) position, only where it matters:
+                # aircraft whose ADS-B has gone quiet.
+                last = [None, None, None]
+                if state in ("dark", "stale") and t.last_adsb_xy:
+                    llat, llon = geo.to_latlon(*t.last_adsb_xy)
+                    last = [t.last_adsb_at.timestamp(), round(llat, 5), round(llon, 5)]
                 rows.append([t.id, round(lat, 5), round(lon, 5),
                              None if heading is None else round(heading),
-                             round(t.speed_mps()), _state(t, now, silence, open_dark),
-                             t.confidence(now)])
+                             round(t.speed_mps()), state, t.confidence(now),
+                             round(t.position_std_m(now)), *last])
             frames.append({"t": now.timestamp(), "tracks": rows})
             next_frame = now + timedelta(seconds=step_s)
 
@@ -145,4 +152,8 @@ def run(start, end, step_s=6.0, inject_kind=None, target=None, region=None):
         "thresholds": {"silence_s": silence, "radar_recency_s": recency},
         "injected": injected and {**injected, "injected_at": injected["injected_at"].timestamp()},
         "tracks": meta, "frames": frames, "alerts": alerts,
+        # Each frame row: id, lat, lon, heading, speed m/s, state, confidence,
+        # position std m, last ADS-B time, last ADS-B lat, last ADS-B lon.
+        "row_fields": ["id", "lat", "lon", "heading", "speed_mps", "state", "confidence",
+                       "position_std_m", "last_adsb_t", "last_adsb_lat", "last_adsb_lon"],
     }

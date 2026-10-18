@@ -38,6 +38,9 @@ class Track:
         self.last_update = observed_at
         self.last_adsb_at = observed_at if source == "adsb" else None
         self.last_radar_at = observed_at if source == "radar" else None
+        # Where the aircraft's own transponder last put it (local x, y) --
+        # the "last confirmed position" once it goes dark.
+        self.last_adsb_xy = (x0, y0) if source == "adsb" else None
         # Altitude from the most recent identified ADS-B tick (None = OpenSky
         # reported no barometric altitude, which it does for aircraft on the
         # ground). anomaly/'s went-dark detector skips ground traffic.
@@ -66,6 +69,7 @@ class Track:
         self.last_update = observed_at
         if source == "adsb":
             self.last_adsb_at = observed_at
+            self.last_adsb_xy = (x, y)
             self.adsb_hits += 1
         else:
             self.last_radar_at = observed_at
@@ -78,6 +82,18 @@ class Track:
             self.alt = AltitudeFilter(h, std, at)
         else:
             self.alt.update(h, std, at)
+
+    def position_std_m(self, at=None):
+        """One-sigma position uncertainty per axis, metres -- how far off the
+        fused position might be, predicted forward to `at` (default: as of
+        the last update). Grows while only noisy radar (or nothing) is
+        updating the track; the web UI draws it as a ring."""
+        if at is None:
+            var = self.kf.position_variance
+        else:
+            _, P = self.kf.peek_predict((at - self.last_update).total_seconds())
+            var = float(P[0, 0] + P[1, 1])
+        return math.sqrt(var / 2)
 
     def note_type(self, aircraft_type, aircraft_variant):
         """Record type from an ADS-B tick. A later tick with no type never

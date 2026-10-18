@@ -268,6 +268,8 @@ def prune_stale(tracks, callsign_to_track, now, track_ttl_s):
 
 def track_row(track, now):
     lat, lon = geo.to_latlon(*track.kf.position)
+    last_lat, last_lon = (geo.to_latlon(*track.last_adsb_xy) if track.last_adsb_xy
+                          else (None, None))
     return {
         "track_id": track.id,
         "external_id": track.external_id,
@@ -285,6 +287,9 @@ def track_row(track, now):
         "aircraft_type": track.aircraft_type,
         "aircraft_variant": track.aircraft_variant,
         "last_adsb_alt_m": track.last_adsb_alt_m,
+        "last_adsb_lat": last_lat,
+        "last_adsb_lon": last_lon,
+        "position_std_m": track.position_std_m(now),
     }
 
 
@@ -319,6 +324,9 @@ def run(poll_seconds, gate_dist_m, gate_staleness_s, track_ttl_s,
         r_adsb_std_m, r_radar_std_m, accel_std, since_id_adsb, since_id_radar,
         region=None):
     bbox = _region_bbox(region)
+    # fused_tracks gains columns over time; adding them here (idempotent)
+    # means an existing database needs no manual migration step.
+    db.init_schema()
     cursor_adsb = since_id_adsb if since_id_adsb is not None else db.latest_raw_id("adsb")
     cursor_radar = since_id_radar if since_id_radar is not None else db.latest_raw_id("radar")
     interval = db.adsb_update_interval()

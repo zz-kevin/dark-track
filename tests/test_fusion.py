@@ -180,6 +180,25 @@ class AltitudeFilterTest(unittest.TestCase):
         self.assertAlmostEqual(f.x[0], 1000.0, delta=20)
 
 
+class DarkTrackingTest(unittest.TestCase):
+    """What the UI shows when following a dark plane."""
+
+    def test_last_confirmed_position_comes_only_from_the_transponder(self):
+        t = _track(0, 0)
+        t.apply(1000, 0, T0 + timedelta(seconds=10), "adsb", 50.0)
+        t.apply(1500, 50, T0 + timedelta(seconds=12), "radar", 150.0)
+        self.assertEqual(t.last_adsb_xy, (1000, 0))
+        radar_born = Track(0, 0, T0, "radar", 3.0, 150.0 ** 2)
+        self.assertIsNone(radar_born.last_adsb_xy)
+
+    def test_uncertainty_grows_while_nothing_updates_the_track(self):
+        t = _track(0, 0, vx=200.0)
+        now = t.position_std_m()
+        later = t.position_std_m(T0 + timedelta(seconds=45))
+        self.assertAlmostEqual(now, t.position_std_m(T0))
+        self.assertGreater(later, 2 * now)
+
+
 class EngineTest(unittest.TestCase):
     def test_two_contacts_of_one_aircraft_in_one_batch_both_join(self):
         track = _track(0, 0, vx=200.0, vel_var=1.0)

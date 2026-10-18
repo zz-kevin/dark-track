@@ -3,26 +3,53 @@
 Map-based UI over `api/`: plain HTML/CSS/JS, Leaflet from cdnjs, no
 build step. Served by `api/server.py` -- open http://localhost:8000.
 
-- **Live** -- the current fused picture, refreshed every 2s. Arrows point
-  along each track's heading, colored by state: ADS-B-corroborated
-  (cyan), radar-only (amber), went dark (red, pulsing), ADS-B quiet
-  (grey); white outline = watched military type. Click a track for its
-  details and a trail of the raw ADS-B fixes and radar contacts fused
-  into it. Alerts list on the right.
-- **Replay** -- pick a stored 15-minute window, optionally inject a
-  went-dark or a 2g maneuver on one aircraft, and play the fused picture
-  back (5-60x) with alerts appearing as they fire and tick marks on the
-  scrubber. With an injection, playback starts 90 s before it and
-  selects the target. Click an alert to jump to it.
+Written for someone who has never seen it: a first visit opens a short
+guide with a **Show me an example** button (a US-military-flagged plane
+over the Gulf switches its transponder off, and the map follows it), the
+**?** button brings the guide back, every control has a tooltip, and the
+labels say what happens rather than how ("A plane switches its
+transponder off", not "inject went_dark"). It opens on **Live** when the
+live feed is running and on **Recordings** otherwise.
 
-The live view's "ADS-B quiet" colour is a display heuristic (no ADS-B in
-the last 90 s of a track's updates); the went-dark *alert* comes from
+- **Recordings** -- pick a stored 15-minute window, optionally simulate a
+  plane going dark or swerving (2g maneuver), and play it back (5-60x,
+  space bar to pause), with alerts appearing as they fire, tick marks on
+  the slider, and a pop-up for each. With an event, playback starts 90 s
+  before it and selects that plane.
+- **Live** -- the current fused picture, refreshed every 2 s, with a
+  pop-up for each new alert.
+
+Arrows point along each plane's heading, coloured by state: identified
+(cyan), dark -- transponder off but radar still tracking (red, pulsing),
+radar only (amber), transponder quiet (grey); white outline = watched
+military type.
+
+## Following a dark plane
+
+- **Dark aircraft panel** -- every plane flying dark right now: how long
+  it's been dark, how far it has flown since, heading and speed.
+- **Follow** (panel, details, or the pop-up) -- keeps the plane centred,
+  with a banner saying how long it's been dark. Moving the map yourself
+  stops following.
+- On the map, for a dark plane: a hollow circle where its own transponder
+  last put it, a dashed line from there to where radar sees it now, a ring
+  for where it could be (two standard deviations of the fused position,
+  predicted to the moment shown), and for the selected or followed plane,
+  where it will be in 5 minutes if it holds course.
+
+The data behind this comes from fusion: each track's last transponder
+position and position uncertainty (`fused_tracks.last_adsb_lat`,
+`last_adsb_lon`, `position_std_m`; replay frame rows -- see
+`api/replay.py` `row_fields`).
+
+The "transponder quiet" colour in Live is a display heuristic (no ADS-B
+in the last 90 s of a track's updates); the went-dark *alert* comes from
 `anomaly/` with cadence-scaled thresholds.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `index.html` | Layout |
-| `style.css` | Dark theme, track markers, phone layout under 760 px |
-| `app.js` | Map, live polling, replay player, inspector, alerts |
+| `index.html` | Layout, the welcome guide |
+| `style.css` | Dark theme, track markers, dark-plane overlays, phone layout under 760 px |
+| `app.js` | Map, live polling, replay player, dark panel, follow mode, pop-ups, inspector |

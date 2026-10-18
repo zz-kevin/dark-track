@@ -10,78 +10,125 @@
 <body>
   <header class="bar">
     <h1>Dark Track</h1>
-    <nav class="modes" role="tablist">
-      <button role="tab" data-mode="live" aria-selected="true">Live</button>
-      <button role="tab" data-mode="replay" aria-selected="false">Replay</button>
+    <nav class="modes" role="tablist" aria-label="What to watch">
+      <button role="tab" data-mode="replay" aria-selected="false"
+              title="Watch recorded flights, and simulate a plane going dark">Recordings</button>
+      <button role="tab" data-mode="live" aria-selected="false"
+              title="Watch aircraft right now (needs the live feed running)">Live</button>
     </nav>
     <div id="status" class="status" aria-live="polite"></div>
+    <button id="help-open" class="help-btn" title="How this works" aria-label="Help">?</button>
   </header>
 
   <main class="layout">
-    <div id="map" aria-label="Map of fused tracks"></div>
+    <div class="map-wrap">
+      <div id="map" aria-label="Map of aircraft"></div>
+      <div id="follow-banner" class="follow-banner" hidden>
+        <span id="follow-text"></span>
+        <button id="follow-stop" class="ghost">Stop following</button>
+      </div>
+      <div id="toasts" class="toasts" aria-live="assertive"></div>
+    </div>
 
     <aside class="side">
       <section id="replay-panel" class="panel" hidden>
-        <h2>Replay a capture</h2>
-        <label>Window
-          <select id="window-select"></select>
+        <h2>Watch a recording</h2>
+        <label><span class="step">1</span> Choose a recording
+          <select id="window-select" title="15 minutes of real air traffic, recorded earlier"></select>
         </label>
-        <div class="row">
-          <label>Inject
-            <select id="inject-kind">
-              <option value="">nothing</option>
-              <option value="went_dark">went dark</option>
-              <option value="kinematic">2g maneuver</option>
-            </select>
-          </label>
-          <label>on
-            <select id="inject-target" disabled><option value="">—</option></select>
-          </label>
-        </div>
-        <button id="load-replay" class="primary">Run fusion on this window</button>
+        <label><span class="step">2</span> Simulate an event <span class="optional">(optional)</span>
+          <select id="inject-kind" title="Make something happen to one aircraft partway through">
+            <option value="">Nothing &mdash; just real traffic</option>
+            <option value="went_dark">A plane switches its transponder off (goes dark)</option>
+            <option value="kinematic">A plane swerves suddenly (2g maneuver)</option>
+          </select>
+        </label>
+        <label id="target-label">Which plane
+          <select id="inject-target" disabled title="The aircraft the event happens to"><option value="">&mdash;</option></select>
+        </label>
+        <button id="load-replay" class="primary">&#9654; Play this recording</button>
         <p id="replay-note" class="note"></p>
 
         <div id="transport" class="transport" hidden>
           <div class="row">
-            <button id="play" aria-label="Play">▶</button>
-            <select id="speed" aria-label="Playback speed">
-              <option value="5">5×</option>
-              <option value="10" selected>10×</option>
-              <option value="30">30×</option>
-              <option value="60">60×</option>
+            <button id="play" aria-label="Play" title="Play / pause (space bar)">&#9654;</button>
+            <select id="speed" aria-label="Playback speed" title="How fast time runs">
+              <option value="5">5&times; speed</option>
+              <option value="10" selected>10&times; speed</option>
+              <option value="30">30&times; speed</option>
+              <option value="60">60&times; speed</option>
             </select>
-            <span id="clock" class="clock"></span>
+            <span id="clock" class="clock" title="Time in the recording (UTC)"></span>
           </div>
           <div class="scrub">
-            <input id="scrubber" type="range" min="0" max="1000" value="0" aria-label="Replay position">
-            <div id="alert-ticks" class="alert-ticks"></div>
+            <input id="scrubber" type="range" min="0" max="1000" value="0" aria-label="Position in the recording"
+                   title="Drag to jump to any moment">
+            <div id="alert-ticks" class="alert-ticks" title="Red marks: when an alert fired"></div>
           </div>
         </div>
       </section>
 
-      <section class="panel legend">
-        <span><i class="dot adsb"></i>ADS-B + radar</span>
-        <span><i class="dot radar"></i>radar only</span>
-        <span><i class="dot dark"></i>went dark</span>
-        <span><i class="dot stale"></i>ADS-B quiet</span>
+      <section id="dark-panel" class="panel dark-panel">
+        <h2>Dark aircraft <span id="dark-count" class="count"></span></h2>
+        <ul id="dark-list"></ul>
+        <p id="dark-empty" class="note">No aircraft are flying dark right now.</p>
       </section>
 
       <section id="inspector" class="panel" hidden>
         <div class="row spread">
           <h2 id="insp-title"></h2>
-          <button id="insp-close" class="ghost" aria-label="Close track details">✕</button>
+          <button id="insp-close" class="ghost" aria-label="Close aircraft details" title="Close">&#10005;</button>
         </div>
+        <button id="insp-follow" class="follow-btn" hidden>Follow this plane</button>
         <dl id="insp-fields"></dl>
         <p id="insp-note" class="note"></p>
+      </section>
+
+      <section class="panel legend" aria-label="What the colours mean">
+        <span><i class="dot adsb"></i>Identified (transponder on)</span>
+        <span><i class="dot dark"></i>Dark &mdash; transponder off</span>
+        <span><i class="dot radar"></i>Radar only (never identified)</span>
+        <span><i class="dot stale"></i>Transponder quiet</span>
       </section>
 
       <section class="panel alerts">
         <h2>Alerts <span id="alert-count" class="count"></span></h2>
         <ol id="alert-list"></ol>
-        <p id="alert-empty" class="note">No anomalies yet.</p>
+        <p id="alert-empty" class="note">No alerts yet.</p>
       </section>
     </aside>
   </main>
+
+  <div id="welcome" class="overlay" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+      <h2 id="welcome-title">Welcome to Dark Track</h2>
+      <p>Aircraft announce who and where they are with a <b>transponder</b>. A <b>radar</b> also sees
+        them, but it can't tell who is who. Dark Track combines the two &mdash; and spots a plane
+        that <b>switches its transponder off</b> while the radar still sees it flying. That's a
+        <b>dark plane</b>.</p>
+      <ol class="steps">
+        <li><b>Pick a recording</b> of real air traffic (or <b>Live</b>, if the live feed is running).</li>
+        <li><b>Press play.</b> Each arrow is a plane, pointing the way it's flying.</li>
+        <li>A <b class="red">red</b> plane has gone dark. Click it, then press <b>Follow</b> to keep it in view:
+          you'll see where it was last confirmed, where it is now, and where it's heading.</li>
+      </ol>
+      <div class="row dialog-buttons">
+        <button id="welcome-example" class="primary">Show me an example</button>
+        <button id="welcome-close">I'll explore on my own</button>
+      </div>
+      <details class="tech">
+        <summary>Colours and terms</summary>
+        <dl>
+          <dt><i class="dot adsb"></i>Cyan</dt><dd>Identified: its transponder and the radar agree.</dd>
+          <dt><i class="dot dark"></i>Red</dt><dd>Dark: transponder silent, but radar still tracking it.</dd>
+          <dt><i class="dot radar"></i>Amber</dt><dd>Seen only by radar, never identified.</dd>
+          <dt><i class="dot stale"></i>Grey</dt><dd>Transponder quiet for a while, not yet flagged.</dd>
+          <dt>Maneuver</dt><dd>An alert when a plane moves in a way it shouldn't (a sudden swerve).</dd>
+          <dt>Confidence</dt><dd>How sure the system is of the position: high with a transponder, low on radar alone.</dd>
+        </dl>
+      </details>
+    </div>
+  </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="app.js"></script>

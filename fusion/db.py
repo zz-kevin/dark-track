@@ -151,7 +151,8 @@ def raw_ticks_since(source, since_id, bbox=None):
 TRACK_COLS = ["track_id", "external_id", "lat", "lon", "speed_mps", "heading_deg",
               "confidence", "adsb_hits", "radar_hits", "last_adsb_at",
               "last_radar_at", "created_at", "updated_at", "aircraft_type",
-              "aircraft_variant", "last_adsb_alt_m"]
+              "aircraft_variant", "last_adsb_alt_m", "last_adsb_lat", "last_adsb_lon",
+              "position_std_m"]
 EVENT_COLS = ["track_id", "source", "raw_tick_id", "observed_at", "residual_m",
               "innovation_std_m", "created_new_track"]
 
