@@ -19,8 +19,9 @@ live feed is running and on **Recordings** otherwise.
   *Simple* (the stored contacts: every plane, same accuracy) or
   *Realistic* (ingestion/radar_model.py: one radar site, drawn on the map
   with a dotted ring for its range; fuzzier far away, nothing below the
-  horizon, and false echoes, which show up as short-lived amber "radar
-  only" tracks).
+  horizon, and false echoes -- which stay off the map: a radar-only track
+  is shown once the radar has seen it three times, docs/FUSION.md
+  "Track confirmation").
 - **Live** -- the current fused picture, refreshed every 2 s, with a
   pop-up for each new alert.
 

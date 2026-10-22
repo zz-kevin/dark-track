@@ -125,7 +125,8 @@ def run(ticks, params=None):
         if anonymous:
             engine.apply_anonymous(anonymous, tracks, p["accel_std"], p["gate_dist_m"],
                                    p["gate_staleness_s"], events, touched)
-        retired = engine.prune_stale(tracks, callsign_to_track, poll_time, p["track_ttl_s"])
+        retired = engine.prune_stale(tracks, callsign_to_track, poll_time, p["track_ttl_s"],
+                                     p["gate_staleness_s"])
 
         yield {"poll_time": poll_time, "tracks": tracks, "events": events,
                "retired": retired, "batch": batch}

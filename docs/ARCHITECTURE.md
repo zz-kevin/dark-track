@@ -294,5 +294,20 @@ Record real decisions here as they're made, in the format:
 > aircraft of went-dark recall on each of two validation windows with
 > the original radar.
 
+> **Decision:** Radar-only tracks are tentative until 3 radar hits
+> (M-of-N confirmation); tentative tracks aren't stored or shown and die
+> at the staleness gate.
+> **Alternatives considered:** 2 hits; a short TTL alone; filtering in
+> the UI only.
+> **Why:** with clutter, every false contact became a track (630-730 an
+> hour on the map). 3 hits removed all of them on every window; 2 left
+> up to 16 an hour on the Gulf. The cost is one radar revisit before an
+> aircraft that never transmitted appears (median 21 s NYC, 81-90 s
+> Gulf), measured by `fusion/confirmation.py` with the whole transponder
+> removed. Doing it in fusion rather than the UI keeps clutter out of
+> the database and the API too. Building it also found that the
+> realistic radar wasn't reproducible (timestamp ties in no fixed order);
+> fixed, and its published numbers re-scored.
+
 This doc is what gets read in an interview — keep it honest, including the
 tradeoffs that were made for time rather than "the right" reason.

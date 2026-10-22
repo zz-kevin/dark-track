@@ -92,6 +92,15 @@ class RegenerateTest(unittest.TestCase):
         self.assertTrue(all(t["id"] < 0 and t["noise_std_m"] > 0 for t in radar))
         self.assertEqual([t for t in a if t["source"] == "adsb"], adsb)
 
+    def test_same_contacts_whatever_order_ties_arrive_in(self):
+        # Two aircraft reporting at the same instants: the database returns
+        # such ties in no fixed order.
+        adsb = flight("AAA1", 25.9, 51.8, 90.0, 220.0) + flight(
+            "BBB2", 26.0, 51.8, 90.0, 220.0, first_id=1000)
+        a = radar_model.regenerate(sorted(adsb, key=lambda t: (t["observed_at"], t["id"])), "gulf")
+        b = radar_model.regenerate(sorted(adsb, key=lambda t: (t["observed_at"], -t["id"])), "gulf")
+        self.assertEqual(a, b)
+
     def test_site_from_the_data(self):
         self.assertIs(radar_model.site_for(flight("A", 40.7, -73.9, 0, 200)),
                       radar_model.SITES["nyc"])

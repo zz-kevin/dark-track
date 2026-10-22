@@ -188,11 +188,15 @@ def regenerate(ticks, region=None, seed=0, site=None):
         return []
     site = site or (SITES[region] if region else site_for(ticks))
     rng = random.Random(seed)
-    adsb = sorted((t for t in ticks if t["source"] == "adsb"), key=lambda t: t["observed_at"])
+    # Ties broken by id: the database returns rows with the same
+    # timestamp in no fixed order, and the seeded draws must land on the
+    # same rows every time.
+    adsb = sorted((t for t in ticks if t["source"] == "adsb"),
+                  key=lambda t: (t["observed_at"], t["id"]))
     radar = [c for c in (contact(site, a, rng) for a in adsb) if c is not None]
     if adsb:
         start, end = adsb[0]["observed_at"], adsb[-1]["observed_at"]
         radar += clutter(site, start, (end - start).total_seconds(), rng)
     for i, r in enumerate(radar, start=1):
         r.update(id=-i, icao24=None, aircraft_type=None, aircraft_variant=None, velocity_at=None)
-    return sorted(adsb + radar, key=lambda t: t["observed_at"])
+    return sorted(adsb + radar, key=lambda t: (t["observed_at"], t["id"]))

@@ -238,28 +238,84 @@ accuracy, which fusion uses as its R (`engine.tick_from_row`). Every
 scoring tool takes `--radar model` and regenerates a stored window's
 radar from its ADS-B (seeded).
 
-Same validation windows, scored once after the code was frozen:
+Same validation windows, scored after the code was frozen (re-scored
+2026-10-22 once the radar was made reproducible -- anomaly/README.md):
 
 | Window | Aircraft passing (old radar) | Realistic radar | Contacts correct | Fused error p50 / p95 | Clutter contacts |
 |---|---|---|---|---|---|
-| NYC 2026-10-16 18:08-18:23 UTC | 82.8% (154/186) | **97.1%** (170/175) | 98.4% | 30 / 76 m | 196 |
-| Gulf 2026-10-12 04:00-04:15 UTC | 100.0% (122/122) | **98.5%** (64/65) | 99.7% | 15 / 51 m | 159 |
-| Gulf 2026-10-13 02:00-02:15 UTC | 100.0% (130/130) | **100.0%** (70/70) | 99.5% | 12 / 44 m | 178 |
-| Gulf 2026-10-14 04:30-04:45 UTC | 96.7% (117/121) | **97.3%** (72/74) | 99.6% | 14 / 55 m | 186 |
+| NYC 2026-10-16 18:08-18:23 UTC | 82.8% (154/186) | **95.4%** (167/175) | 98.6% | 30 / 74 m | 193 |
+| Gulf 2026-10-12 04:00-04:15 UTC | 100.0% (122/122) | **100.0%** (64/64) | 99.9% | 16 / 56 m | 158 |
+| Gulf 2026-10-13 02:00-02:15 UTC | 100.0% (130/130) | **98.6%** (69/70) | 99.4% | 12 / 46 m | 199 |
+| Gulf 2026-10-14 04:30-04:45 UTC | 96.7% (117/121) | **96.0%** (72/75) | 98.9% | 14 / 50 m | 188 |
 
 - Association still clears the 90% target everywhere. NYC all-traffic
-  *improves* (82.8% -> 97.1%) for a reason that isn't to fusion's
+  *improves* (82.8% -> 95.4%) for a reason that isn't to fusion's
   credit: the terminal radar can't see most taxiing aircraft (below its
   horizon), and ground traffic was where NYC lost it.
-- Fewer aircraft are scored on the Gulf (65-74 vs 121-130): one radar
+- Fewer aircraft are scored on the Gulf (64-75 vs 121-130): one radar
   covers part of the region, as one radar would.
-- Gulf fused error is lower (p50 12-15 m vs 23 m): most Gulf contacts
+- Gulf fused error is lower (p50 12-16 m vs 23-24 m): most Gulf contacts
   in coverage are well inside 200 km, where the realistic radar is more
   accurate than a flat 150 m, and fusion now knows which contacts those
   are.
 - Clutter (12 false contacts a minute) didn't land on aircraft tracks
   once the gate was capped; development windows before the cap had
   went-dark false alarms from exactly that (anomaly/README.md).
+
+## Track confirmation
+
+Every radar contact that matches no track starts a new one. With the
+realistic radar's clutter (12 false contacts a minute), that put 630-730
+false tracks an hour on the picture -- the amber dots in the UI. Real
+trackers don't show a track on one plot: it's **tentative** until it has
+been seen again along a flyable path.
+
+Here: a track born from a radar contact is tentative until it has
+`track.CONFIRM_HITS = 3` radar hits; any ADS-B confirms it at once.
+Tentative tracks are left out of `fused_tracks` and replays, and are
+retired as soon as nothing can associate to them any more (the
+staleness gate, not the longer TTL). Clutter is uncorrelated from scan
+to scan, so it almost never strings three contacts together.
+
+`fusion/confirmation.py` measures both sides: false tracks (radar-only
+tracks that confirmed although most of their contacts were clutter) per
+hour, and, for every airborne aircraft with at least 3 radar contacts,
+whether it still gets a confirmed track with its transponder off for the
+whole window (`anomaly/inject.inject_never_identified`, one aircraft per
+run -- batching them let neighbours take each other's contacts), and how
+long after its first contact. Development windows, realistic radar:
+
+| Hits to confirm | False tracks / hour | Never-identified aircraft confirmed | Median delay |
+|---|---|---|---|
+| 1 (before) | 630-730 | 96-100% | 0 s |
+| 2 | 0-16 | 97-100% | 8 s NYC, 41-42 s Gulf |
+| **3** | **0** | **95-100%** | **22 s NYC, 80-93 s Gulf** |
+| 4 | 0 | 93-99% | 31 s NYC, 136-137 s Gulf |
+
+Three is the usual choice and the smallest that removed every false
+track on the Gulf; the price is one more radar revisit before an
+aircraft that never transmitted appears. The misses are low aircraft
+near airports (A07, A7GAA) whose few contacts went to identified
+neighbours -- the same ground-traffic limit as NYC association.
+
+Validation windows (realistic radar, frozen code, 3 hits):
+
+| Window | False tracks / hour | Never-identified aircraft confirmed | Median / max delay |
+|---|---|---|---|
+| NYC 2026-10-16 18:08-18:23 UTC | **0** (of 200 radar-only tracks created) | **94.5%** (138/146) | 21 s / 138 s |
+| Gulf 2026-10-12 04:00-04:15 UTC | **0** (of 158) | **89.8%** (53/59) | 81 s / 542 s |
+| Gulf 2026-10-13 02:00-02:15 UTC | **0** (of 197) | **93.0%** (53/57) | 90 s / 447 s |
+| Gulf 2026-10-14 04:30-04:45 UTC | **0** (of 185) | **97.0%** (65/67) | 82 s / 511 s |
+
+Nothing else moved: with the original radar every went-dark, kinematic
+and association number is identical with and without confirmation, and
+with the realistic radar went-dark is identical too (checked on two
+windows with confirmation off).
+
+Caveat: radar contacts still carry a speed and heading copied (with
+noise) from the ADS-B they were made from, which a real plot wouldn't;
+it seeds a new track's velocity, so confirmation here is easier than it
+would be from positions alone.
 
 ## Known limitations
 

@@ -177,7 +177,9 @@ def ticks_in_window(start, end, source=None, aircraft_types=None):
     if aircraft_types:
         query += " AND aircraft_type = ANY(%s)"
         params.append(list(aircraft_types))
-    query += " ORDER BY observed_at"
+    # id breaks timestamp ties, so a window always comes back in the same
+    # order (replays and seeded radar regeneration depend on it).
+    query += " ORDER BY observed_at, id"
 
     with get_conn() as conn, conn.cursor() as cur:
         with schema_hint():

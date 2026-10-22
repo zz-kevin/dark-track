@@ -54,9 +54,13 @@ miss -- taxiing aircraft closer together than the radar can resolve.
 With the **realistic radar** (`--radar model`: one radar site per
 region, accuracy that degrades with range, a horizon, false echoes --
 [`ingestion/README.md`](ingestion/README.md)), on the same windows:
-fusion 97.1-100%; went-dark 93.0-99.2% of the events the radar can see,
-false alarms 0-2.8%; maneuver detection 57-66% on the Gulf, down from
+fusion 95.4-100%; went-dark 89.6-98.3% of the events the radar can see,
+no false alarms; maneuver detection 57-68% on the Gulf, down from
 83-90%, all of it from aircraft outside the one radar's coverage.
+Radar-only tracks are shown once the radar has seen them three times:
+that removed every false (clutter) track -- 630-730 an hour before -- and
+still confirms 90-97% of aircraft flying with no transponder at all,
+21 s (NYC) to 81-90 s (Gulf) after the radar first sees them.
 
 ## Running it
 
