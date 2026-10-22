@@ -17,6 +17,13 @@ from kalman import KalmanFilter
 # "cv": one constant-velocity Kalman filter per track. "imm": constant
 # velocity + coordinated turn, blended (imm.py).
 FILTER = "cv"
+# Track confirmation: a track born from a radar contact is tentative until
+# it has this many radar hits (or any ADS-B). Clutter is uncorrelated from
+# scan to scan, so it almost never strings three contacts together along a
+# flyable path; a real aircraft does it in two revisits. Tentative tracks
+# aren't shown or stored, and are dropped once they can no longer be
+# associated (engine.prune_stale).
+CONFIRM_HITS = 3
 
 
 class Track:
@@ -50,6 +57,7 @@ class Track:
         self.alt = None
         self.adsb_hits = 1 if source == "adsb" else 0
         self.radar_hits = 1 if source == "radar" else 0
+        self.confirmed_at = observed_at if self.confirmed else None
         self.last_residual_m = 0.0
         # Placeholder for the "created, not yet updated" event this track's
         # constructor tick gets logged with (see apply_identified/
@@ -74,6 +82,12 @@ class Track:
         else:
             self.last_radar_at = observed_at
             self.radar_hits += 1
+        if self.confirmed_at is None and self.confirmed:
+            self.confirmed_at = observed_at
+
+    @property
+    def confirmed(self):
+        return self.adsb_hits > 0 or self.radar_hits >= CONFIRM_HITS
 
     def observe_altitude(self, h, std, at):
         if h is None or std is None:

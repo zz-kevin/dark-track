@@ -79,6 +79,17 @@ def inject_went_dark(ticks, external_id, cutoff_fraction=0.5):
     return modified, ground_truth
 
 
+def inject_never_identified(ticks, external_ids):
+    """Removes every ADS-B tick of each aircraft in `external_ids`: aircraft
+    flying with their transponder off the whole time, seen only by radar.
+    Radar contacts are left as they are -- generate them (radar_model
+    regenerate) before calling this, from the full ADS-B. Returns the
+    modified ticks; which radar contacts belong to whom is the caller's
+    (ingestion/radar_truth.label on the unmodified ticks)."""
+    gone = set(external_ids)
+    return [t for t in ticks if not (t["source"] == "adsb" and t["external_id"] in gone)]
+
+
 def inject_kinematic_jump(ticks, external_id, cutoff_fraction=0.5,
                            lateral_accel_mps2=20.0, seed=None, radar_sources=None):
     """Simulates a sustained maneuver the constant-velocity model can't

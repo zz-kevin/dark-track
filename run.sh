@@ -39,13 +39,14 @@ case "$1" in
     harness) script=anomaly/harness.py ;;
     accuracy) script=fusion/accuracy.py ;;
     bench)   script=fusion/bench.py ;;
+    confirmation) script=fusion/confirmation.py ;;
     api)     script=api/server.py ;;
-    *) echo "usage: $0 {status|test|poll|radar|fusion|anomaly|api|replay|harness|accuracy|bench} [args...]" >&2; exit 2 ;;
+    *) echo "usage: $0 {status|test|poll|radar|fusion|anomaly|api|replay|harness|accuracy|bench|confirmation} [args...]" >&2; exit 2 ;;
 esac
 name=$1
 shift
 case "$script" in
-    *replay.py|*harness.py|*accuracy.py|*bench.py)
+    *replay.py|*harness.py|*accuracy.py|*bench.py|*confirmation.py)
         exec "$ROOT/.venv/bin/python" "$ROOT/$script" "$@" ;;
 esac
 

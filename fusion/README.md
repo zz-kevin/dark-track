@@ -30,6 +30,7 @@ Design reasoning and rejected alternatives are in
 | `simulate.py` | The same fusion calls run in memory over a stored window -- shared by the harness, accuracy, bench and the API's replay |
 | `accuracy.py` | Association accuracy against radar ground truth (docs/PROBLEM.md's 300 m / 5 s / 90% target) |
 | `bench.py` | Throughput + tick -> fused_tracks latency, real Postgres writes into a scratch DB |
+| `confirmation.py` | Track confirmation: false (clutter) tracks per hour, and how fast an aircraft flying with no transponder at all gets a confirmed track |
 
 ## Running it
 
@@ -44,6 +45,7 @@ python3 engine.py --region gulf   # when two pollers are running at once
 ```
 python3 accuracy.py 2026-10-14T06:15:00+00:00 2026-10-14T06:30:00+00:00
 python3 bench.py 2026-10-14T06:15:00+00:00 2026-10-14T06:30:00+00:00 --copies 4
+python3 confirmation.py 2026-10-14T06:15:00+00:00 2026-10-14T06:30:00+00:00 --region gulf
 ```
 
 Add `--region nyc|gulf` if both pollers ran during the window. `bench.py`

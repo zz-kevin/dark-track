@@ -129,41 +129,51 @@ sigma within 33s, and approach traffic turns all the time (61.5-65% on
 the daytime NYC capture, which has more cruising traffic). No stated
 target; false alarms under 3% everywhere.
 
-### Realistic radar (2026-10-18)
+### Realistic radar (2026-10-18; re-scored 2026-10-22)
 
 Everything above uses the original simulated radar: every aircraft
 seen, 150 m everywhere, nothing false. `--radar model` re-runs a window
 with ingestion/radar_model.py's radar instead -- one site per region,
 accuracy that degrades with range, a horizon, and 12 false contacts a
-minute (ingestion/README.md). Same validation windows, scored once after
-the code was frozen:
+minute (ingestion/README.md). Same validation windows, scored after the
+code was frozen:
 
 | Window | Went-dark recall | False-positive rate | Kinematic recall | Coverage gaps skipped |
 |---|---|---|---|---|
-| NYC 2026-10-16 18:08-18:23 UTC | **99.2%** (120/121) | **0.6%** (1/165) | 62.7% (101/161) | 2 |
-| Gulf 2026-10-12 04:00-04:15 UTC | **96.4%** (53/55) | **0.0%** (0/111) | 66.4% (71/107) | 55 |
-| Gulf 2026-10-13 02:00-02:15 UTC | **93.0%** (40/43) | **2.8%** (3/106) | 57.1% (60/105) | 61 |
-| Gulf 2026-10-14 04:30-04:45 UTC | **96.2%** (50/52) | **1.0%** (1/102) | 62.0% (62/100) | 49 |
+| NYC 2026-10-16 18:08-18:23 UTC | **98.3%** (119/121) | **0.0%** (0/165) | 64.0% (103/161) | 2 |
+| Gulf 2026-10-12 04:00-04:15 UTC | **98.1%** (52/53) | **0.0%** (0/111) | 64.5% (69/107) | 57 |
+| Gulf 2026-10-13 02:00-02:15 UTC | **89.6%** (43/48) | **0.0%** (0/106) | 57.1% (60/105) | 56 |
+| Gulf 2026-10-14 04:30-04:45 UTC | **91.2%** (52/57) | **0.0%** (0/102) | 68.0% (68/100) | 44 |
 
-- **Went-dark holds up where the radar can see** (93.0-99.2%). Half the
-  Gulf aircraft are now skipped as coverage gaps: one 200 nmi radar
+**Re-scored:** the first version of this table (93.0-99.2% went-dark,
+0-2.8% false alarms) came from radar that wasn't reproducible after
+all. The database returns rows with equal timestamps in no fixed order,
+so the "seeded" draws landed on different rows each run. Ties are now
+broken by id, and a test pins it. The table above is the reproducible
+draw. With ~50 scorable Gulf aircraft per window, one draw of the radar
+can move recall by a few points. Track confirmation, added in the same
+change, has no effect on these numbers (same 43/48 and 52/57 with it
+off).
+
+- **Went-dark holds up where the radar can see** (89.6-98.3%). About
+  half the Gulf aircraft are skipped as coverage gaps: one 200 nmi radar
   doesn't cover a 1,000 km box, and a plane the radar can't see going
-  dark is undetectable by construction.
-- **False alarms are no longer zero** (0-2.8%, under the 5% target).
-  On the development windows they were 3-5% at first, and every one
-  traced to the same thing: a clutter contact accepted 10-30 km from a
-  track coasting through an ordinary transponder pause, so the silent
-  track looked radar-corroborated. A coasting constant-velocity track's
-  gate opens to ~12 km after 90 s. Fix: cap the gate at 10 km (~3x the
-  measured p95 prediction error), plus a background-density test
-  (fusion/associate.py). That took the development windows to 0%. Height
-  gating, the other candidate, made it worse (7.6%).
-- **Kinematic drops on Gulf traffic** (83-90% -> 57-66%) **entirely from
+  dark is undetectable by construction. Gulf 10-13 falls just under 90%.
+- **No false alarms on ordinary traffic.** On the development windows
+  this radar first gave 3-5%, and every one traced to the same thing: a
+  clutter contact accepted 10-30 km from a track coasting through an
+  ordinary transponder pause, so the silent track looked
+  radar-corroborated. A coasting constant-velocity track's gate opens to
+  ~12 km after 90 s. Fix: cap the gate at 10 km (~3x the measured p95
+  prediction error), plus a background-density test
+  (fusion/associate.py). Height gating, the other candidate, made it
+  worse (7.6%).
+- **Kinematic drops on Gulf traffic** (83-90% -> 57-68%) **entirely from
   coverage**: split on the development windows, aircraft the radar sees
   on at least half their fixes scored the same as before (21/27 vs
   21/27, 62/76 vs 61/76); the drop is all aircraft outside it, where
   ADS-B alone has to show the maneuver. NYC, inside one terminal radar,
-  is unchanged (61.5% -> 62.7%).
+  is unchanged (61.5% -> 64.0%).
 
 ### Alert episodes (2026-10-16)
 

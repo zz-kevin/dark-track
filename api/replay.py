@@ -139,6 +139,8 @@ def run(start, end, step_s=6.0, inject_kind=None, target=None, region=None, rada
         if next_frame is None or now >= next_frame:
             rows = []
             for t in tracks.values():
+                if not t.confirmed:
+                    continue  # tentative: maybe clutter (fusion/track.py CONFIRM_HITS)
                 if t.id not in meta:
                     meta[t.id] = {"external_id": t.external_id}
                 if t.aircraft_type and "type" not in meta[t.id]:

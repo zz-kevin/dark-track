@@ -257,10 +257,15 @@ def _apply_anonymous_slice(ticks, tracks, accel_std, gate_dist_m, gate_staleness
             _record_update(events, touched, track, tick, created_new_track=True)
 
 
-def prune_stale(tracks, callsign_to_track, now, track_ttl_s):
+def prune_stale(tracks, callsign_to_track, now, track_ttl_s, tentative_ttl_s=None):
+    """Retires tracks not updated within track_ttl_s -- or, for a tentative
+    track (track.CONFIRM_HITS), within tentative_ttl_s: pass the staleness
+    gate, past which nothing can associate to it and it can never confirm."""
+    tentative_ttl_s = track_ttl_s if tentative_ttl_s is None else tentative_ttl_s
     stale_ids = [
         tid for tid, t in tracks.items()
-        if (now - t.last_update).total_seconds() > track_ttl_s
+        if (now - t.last_update).total_seconds()
+        > (track_ttl_s if t.confirmed else tentative_ttl_s)
     ]
     for tid in stale_ids:
         track = tracks.pop(tid)
@@ -301,7 +306,10 @@ def persist(tracks, touched_ids, events, retired_ids, now):
     in one transaction. Was one connection per touched track: measured
     p95 759 ms per cycle on a 45s-cadence Gulf burst (~120 tracks at once),
     more than the whole 500 ms latency target on its own."""
-    rows = [track_row(tracks[tid], now) for tid in touched_ids if tid in tracks]
+    # Tentative tracks stay out of fused_tracks; one is written the cycle it
+    # confirms (it's touched then). Its events are logged either way.
+    rows = [track_row(tracks[tid], now) for tid in touched_ids
+            if tid in tracks and tracks[tid].confirmed]
     db.write_cycle(events, rows, retired_ids)
 
 
@@ -388,7 +396,8 @@ def run(poll_seconds, gate_dist_m, gate_staleness_s, track_ttl_s,
                 (t["observed_at"] for t in adsb_ticks + radar_ticks),
                 default=datetime.now(timezone.utc),
             )
-            stale_ids = prune_stale(tracks, callsign_to_track, now, track_ttl_s)
+            stale_ids = prune_stale(tracks, callsign_to_track, now, track_ttl_s,
+                                    gate_staleness_s)
             unwritten["events"] += events
             unwritten["touched"] |= touched
             unwritten["retired"] += stale_ids
