@@ -276,5 +276,23 @@ Record real decisions here as they're made, in the format:
 > it means a replay always reflects current fusion code and can inject
 > the same anomalies the harness scores, which a stored replay couldn't.
 
+> **Decision:** A realistic radar model (one notional site per region,
+> polar errors, detection falloff, horizon, clutter, per-contact
+> accuracy) as an option on every tool, not a replacement; the
+> covariance gate capped at 10 km.
+> **Alternatives considered:** MLAT from OpenSky as a real second sensor;
+> replacing the original radar outright; height gating instead of the
+> cap.
+> **Why:** OpenSky's REST feed turned out to be all ADS-B (every sampled
+> aircraft, in four regions, had position_source 0), so a second real
+> sensor wasn't available; a radar with the properties that make fusion
+> hard was the next best test. Kept beside the original so every earlier
+> number stays reproducible. Its clutter exposed a real gap: a coasting
+> track's gate opened to ~12 km and accepted false contacts as radar
+> corroboration (3-5% went-dark false alarms on development windows).
+> The cap fixed it there; height gating made it worse. It cost one
+> aircraft of went-dark recall on each of two validation windows with
+> the original radar.
+
 This doc is what gets read in an interview — keep it honest, including the
 tradeoffs that were made for time rather than "the right" reason.

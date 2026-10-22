@@ -52,6 +52,7 @@ def _load_module(name, path):
 ingestion_db = _load_module("ingestion_db", ROOT / "ingestion" / "db.py")
 detectors = _load_module("detectors", ROOT / "anomaly" / "detectors.py")
 regions = _load_module("regions", ROOT / "ingestion" / "regions.py")
+radar_model = _load_module("radar_model", ROOT / "ingestion" / "radar_model.py")
 
 
 def overlay_copies(ticks, copies, shift_deg=0.5):
@@ -161,6 +162,8 @@ def main():
     p.add_argument("end", type=parse_ts)
     p.add_argument("--region", choices=sorted(regions.REGIONS), default=None)
     p.add_argument("--copies", type=int, default=1)
+    p.add_argument("--radar", choices=["stored", "model"], default="stored",
+                   help="model: regenerate the radar with ingestion/radar_model.py")
     p.add_argument("--poll-seconds", type=float, default=None,
                    help="fusion poll interval (default: engine.py's default)")
     p.add_argument("--no-db", action="store_true", help="skip the Postgres writes")
@@ -175,6 +178,8 @@ def main():
     if not ticks:
         sys.exit("no ticks in that window")
     ticks = overlay_copies(ticks, args.copies)
+    if args.radar == "model":  # after copying, so contact ids stay unique
+        ticks = radar_model.regenerate(ticks, args.region)
     params = simulate.scaled_params(ticks)
     params["poll_seconds"] = args.poll_seconds or engine.DEFAULT_POLL_SECONDS
     if not args.no_db:

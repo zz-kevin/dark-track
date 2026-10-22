@@ -15,7 +15,12 @@ live feed is running and on **Recordings** otherwise.
   plane going dark or swerving (2g maneuver), and play it back (5-60x,
   space bar to pause), with alerts appearing as they fire, tick marks on
   the slider, and a pop-up for each. With an event, playback starts 90 s
-  before it and selects that plane.
+  before it and selects that plane. **Radar** picks the simulated radar:
+  *Simple* (the stored contacts: every plane, same accuracy) or
+  *Realistic* (ingestion/radar_model.py: one radar site, drawn on the map
+  with a dotted ring for its range; fuzzier far away, nothing below the
+  horizon, and false echoes, which show up as short-lived amber "radar
+  only" tracks).
 - **Live** -- the current fused picture, refreshed every 2 s, with a
   pop-up for each new alert.
 

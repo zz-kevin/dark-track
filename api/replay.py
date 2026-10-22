@@ -44,6 +44,7 @@ if _held_db is not None:
 ingestion_db = _load_module("ingestion_db", ROOT / "ingestion" / "db.py")
 radar_truth = _load_module("radar_truth", ROOT / "ingestion" / "radar_truth.py")
 regions = _load_module("regions", ROOT / "ingestion" / "regions.py")
+radar_model = _load_module("radar_model", ROOT / "ingestion" / "radar_model.py")
 aircraft_types = _load_module("aircraft_types", ROOT / "ingestion" / "aircraft_types.py")
 detectors = _load_module("detectors", ROOT / "anomaly" / "detectors.py")
 inject = _load_module("inject", ROOT / "anomaly" / "inject.py")
@@ -73,12 +74,24 @@ def _state(track, now, silence_s, dark_ids):
     return "stale"
 
 
-def window_ticks(start, end, region):
-    return regions.pick(ingestion_db.ticks_in_window(start, end), region)
+def window_ticks(start, end, region, radar="stored"):
+    """The window's ticks; radar="model" swaps the stored radar for
+    ingestion/radar_model.py's (seeded, so every replay sees the same)."""
+    ticks = regions.pick(ingestion_db.ticks_in_window(start, end), region)
+    if radar == "model":
+        ticks = radar_model.regenerate(ticks, region)
+    elif radar != "stored":
+        raise ValueError(f"unknown radar {radar!r} (stored or model)")
+    return ticks
 
 
-def run(start, end, step_s=6.0, inject_kind=None, target=None, region=None):
-    ticks = window_ticks(start, end, region)
+def _site_json(ticks):
+    site = radar_model.site_for(ticks)
+    return {"name": site.name, "lat": site.lat, "lon": site.lon, "max_range_m": site.max_range_m}
+
+
+def run(start, end, step_s=6.0, inject_kind=None, target=None, region=None, radar="stored"):
+    ticks = window_ticks(start, end, region, radar)
     if not ticks:
         return {"error": "no ticks in that window"}
 
@@ -152,6 +165,9 @@ def run(start, end, step_s=6.0, inject_kind=None, target=None, region=None):
         "thresholds": {"silence_s": silence, "radar_recency_s": recency},
         "injected": injected and {**injected, "injected_at": injected["injected_at"].timestamp()},
         "tracks": meta, "frames": frames, "alerts": alerts,
+        "radar": radar,
+        # Where the radar is and how far it sees (radar="model" only).
+        "radar_site": _site_json(ticks) if radar == "model" else None,
         # Each frame row: id, lat, lon, heading, speed m/s, state, confidence,
         # position std m, last ADS-B time, last ADS-B lat, last ADS-B lon.
         "row_fields": ["id", "lat", "lon", "heading", "speed_mps", "state", "confidence",

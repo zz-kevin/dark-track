@@ -63,8 +63,8 @@ validation windows it gave 92.9-95.5% where this gives 95.5-97.1%).
 |---|---|---|---|---|---|---|---|
 | NYC 2026-10-16 18:08-18:23 UTC | validation | 11s | **98.3%** (119/121) | 27.1s | **0.0%** (0/165) | 0.01 | 2 |
 | Gulf 2026-10-12 04:00-04:15 UTC | validation | 45s | **98.1%** (106/108) | 49.8s | **0.0%** (0/111) | 0.03 | 2 |
-| Gulf 2026-10-13 02:00-02:15 UTC | validation | 46s | **94.2%** (98/104) | 51.4s | **0.0%** (0/106) | 0.03 | 0 |
-| Gulf 2026-10-14 04:30-04:45 UTC | validation | 46s | **96.9%** (94/97) | 52.9s | **0.0%** (0/102) | 0.03 | 4 |
+| Gulf 2026-10-13 02:00-02:15 UTC | validation | 46s | **93.3%** (97/104) | 51.4s | **0.0%** (0/106) | 0.03 | 0 |
+| Gulf 2026-10-14 04:30-04:45 UTC | validation | 46s | **95.9%** (93/97) | 52.9s | **0.0%** (0/102) | 0.03 | 4 |
 | Gulf 2026-10-11 23:30-23:45 UTC | validation, earlier | 46s | **95.5%** (105/110) | 46.4s | **0.0%** (0/113) | 0.09 | 3 |
 | Gulf 2026-10-13 07:00-07:15 UTC | validation, earlier | 45s | **97.1%** (100/103) | 47.7s | **0.0%** (0/107) | 0.02 | 3 |
 | Gulf 2026-10-14 08:00-08:15 UTC | validation, earlier | 46s | **95.5%** (105/110) | 50.6s | **0.0%** (0/111) | 0.06 | 1 |
@@ -76,14 +76,19 @@ validation windows it gave 92.9-95.5% where this gives 95.5-97.1%).
 | Gulf 2026-10-12 05:00-05:15 UTC | validation, earlier | 45s | **94.7%** (107/113) | 48.8s | **0.0%** (0/121) | 0.08 | 6 |
 | Gulf 2026-10-11 05:45-06:00 UTC | validation, earlier | 46s | **96.3%** (131/136) | 45.4s | **0.0%** (0/140) | 0.14 | 3 |
 | Gulf 2026-10-16 04:45-05:00 UTC | development | 46s | **88.4%** (84/95) | 52.2s | **1.0%** (1/105) | 0.03 | 5 |
-| Gulf 2026-10-16 04:10-04:25 UTC | development | 46s | **85.7%** (78/91) | 48.3s | **0.0%** (0/105) | 0.14 | 7 |
+| Gulf 2026-10-16 04:10-04:25 UTC | development | 46s | **83.5%** (76/91) | 48.3s | **0.0%** (0/105) | 0.07 | 7 |
 | Gulf 2026-10-13 05:30-05:45 UTC | development | 45s | **97.6%** (123/126) | 42.4s | **0.0%** (0/132) | 0.01 | 4 |
 | Gulf 2026-10-14 06:15-06:30 UTC | development | 45s | **96.9%** (125/129) | 49.5s | **0.0%** (0/134) | 0.02 | 2 |
 | Gulf 2026-10-10 02:01-02:16 UTC | development | 45s | **97.6%** (121/124) | 44.5s | **0.0%** (0/125) | 0.02 | 0 |
 | NYC 2026-10-16 17:52-18:07 UTC | development | 11s | **98.4%** (124/126) | 26.7s | **0.0%** (0/181) | 0.01 | 3 |
 | NYC 2026-10-10 02:38-03:08 UTC | development | 11s | **96.0%** (95/99) | 25.8s | **0.0%** (0/150) | 0.01 | 12 |
 
-**94.2-98.3% recall on the validation windows, no false alarms on
+The four validation rows, Gulf 2026-10-16 04:10 and NYC 2026-10-10
+02:38 are re-scored with the 10 km gate cap added for the realistic
+radar (below), which cost one aircraft on each of two validation
+windows (Gulf 10-13 98 -> 97, 10-14 94 -> 93); the other rows predate it.
+
+**93.3-98.3% recall on the validation windows, no false alarms on
 ordinary traffic** (docs/PROBLEM.md target: under 5%; 0-2% across all
 19 windows). The low end is the development windows from the Gulf
 morning capture (85.7%, 88.4%): holding patterns sampled every 45 s,
@@ -123,6 +128,42 @@ weak one at NYC (35-43%): with 11s updates a deviation has to clear 4
 sigma within 33s, and approach traffic turns all the time (61.5-65% on
 the daytime NYC capture, which has more cruising traffic). No stated
 target; false alarms under 3% everywhere.
+
+### Realistic radar (2026-10-18)
+
+Everything above uses the original simulated radar: every aircraft
+seen, 150 m everywhere, nothing false. `--radar model` re-runs a window
+with ingestion/radar_model.py's radar instead -- one site per region,
+accuracy that degrades with range, a horizon, and 12 false contacts a
+minute (ingestion/README.md). Same validation windows, scored once after
+the code was frozen:
+
+| Window | Went-dark recall | False-positive rate | Kinematic recall | Coverage gaps skipped |
+|---|---|---|---|---|
+| NYC 2026-10-16 18:08-18:23 UTC | **99.2%** (120/121) | **0.6%** (1/165) | 62.7% (101/161) | 2 |
+| Gulf 2026-10-12 04:00-04:15 UTC | **96.4%** (53/55) | **0.0%** (0/111) | 66.4% (71/107) | 55 |
+| Gulf 2026-10-13 02:00-02:15 UTC | **93.0%** (40/43) | **2.8%** (3/106) | 57.1% (60/105) | 61 |
+| Gulf 2026-10-14 04:30-04:45 UTC | **96.2%** (50/52) | **1.0%** (1/102) | 62.0% (62/100) | 49 |
+
+- **Went-dark holds up where the radar can see** (93.0-99.2%). Half the
+  Gulf aircraft are now skipped as coverage gaps: one 200 nmi radar
+  doesn't cover a 1,000 km box, and a plane the radar can't see going
+  dark is undetectable by construction.
+- **False alarms are no longer zero** (0-2.8%, under the 5% target).
+  On the development windows they were 3-5% at first, and every one
+  traced to the same thing: a clutter contact accepted 10-30 km from a
+  track coasting through an ordinary transponder pause, so the silent
+  track looked radar-corroborated. A coasting constant-velocity track's
+  gate opens to ~12 km after 90 s. Fix: cap the gate at 10 km (~3x the
+  measured p95 prediction error), plus a background-density test
+  (fusion/associate.py). That took the development windows to 0%. Height
+  gating, the other candidate, made it worse (7.6%).
+- **Kinematic drops on Gulf traffic** (83-90% -> 57-66%) **entirely from
+  coverage**: split on the development windows, aircraft the radar sees
+  on at least half their fixes scored the same as before (21/27 vs
+  21/27, 62/76 vs 61/76); the drop is all aircraft outside it, where
+  ADS-B alone has to show the maneuver. NYC, inside one terminal radar,
+  is unchanged (61.5% -> 62.7%).
 
 ### Alert episodes (2026-10-16)
 

@@ -24,7 +24,10 @@ the headline number is the share of aircraft that pass. Aircraft whose
 ADS-B carries no callsign are excluded (there's no track identity to
 check against), as are contacts radar_truth couldn't label.
 
-    python3 accuracy.py <start-iso> <end-iso> [--region nyc|gulf]
+    python3 accuracy.py <start-iso> <end-iso> [--region nyc|gulf] [--radar model]
+
+--radar model replaces the window's stored radar with ingestion/
+radar_model.py's (generated from the same ADS-B, seeded by --radar-seed).
 """
 
 import argparse
@@ -55,6 +58,7 @@ def _load_module(name, path):
 ingestion_db = _load_module("ingestion_db", INGESTION_DIR / "db.py")
 radar_truth = _load_module("radar_truth", INGESTION_DIR / "radar_truth.py")
 regions = _load_module("regions", INGESTION_DIR / "regions.py")
+radar_model = _load_module("radar_model", INGESTION_DIR / "radar_model.py")
 
 
 def evaluate(ticks, params=None):
@@ -117,8 +121,8 @@ def report(contacts, label_stats, params):
     total = sum(label_stats.values())
     print(f"window adsb interval {params['adsb_interval_s']:.0f}s; radar contacts {total}: "
           f"{label_stats['exact']} exact truth, {label_stats['inferred']} inferred, "
-          f"{label_stats['ambiguous']} ambiguous, {label_stats['unmatched']} unmatched "
-          f"(last two unscored)")
+          f"{label_stats['ambiguous']} ambiguous, {label_stats['unmatched']} unmatched, "
+          f"{label_stats['clutter']} clutter (last three unscored)")
     for name, airborne_only in (("all traffic", False), ("airborne only", True)):
         s = summarize(contacts, airborne_only)
         print(f"\n{name}: {s['contacts']} contacts from {s['aircraft']} aircraft")
@@ -147,6 +151,10 @@ def main():
     p.add_argument("end", type=parse_ts)
     p.add_argument("--region", choices=sorted(regions.REGIONS), default=None,
                    help="required when the window holds more than one region's traffic")
+    p.add_argument("--radar", choices=["stored", "model"], default="stored",
+                   help="stored: the radar contacts in the database. model: regenerate "
+                        "them with ingestion/radar_model.py")
+    p.add_argument("--radar-seed", type=int, default=0)
     args = p.parse_args()
     try:
         ticks = regions.pick(ingestion_db.ticks_in_window(args.start, args.end), args.region)
@@ -155,6 +163,8 @@ def main():
     if not ticks:
         print("no ticks in that window")
         return
+    if args.radar == "model":
+        ticks = radar_model.regenerate(ticks, args.region, args.radar_seed)
     report(*evaluate(ticks))
 
 

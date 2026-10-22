@@ -85,6 +85,15 @@ timestamp (`fusion/associate.py`):
   drops 10%) left a just-gone-dark Gulf track out of reach of the next
   one (94s vs. a 90s gate), and it never got radar again.
 
+Two more limits, added with the realistic radar (see "Realistic radar"
+below): the covariance gate never reaches past **10 km**
+(`associate.MAX_GATE_M`), and a contact only goes to a track whose
+predicted density at it beats a uniform density over one radar's
+coverage (`BACKGROUND_DENSITY_PER_M2`). A track coasting through a
+transponder pause has a constant-velocity covariance of ~12 km after
+90 s; clutter landing inside that gate was being taken as radar
+corroboration.
+
 ADS-B ticks that carry a callsign skip gating entirely — callsign is a
 ground truth identity, so they update-or-create their track directly by a
 callsign -> track_id map.
@@ -217,6 +226,40 @@ contacts swapped between taxiing neighbours (254 of the 257 ground
 misses landed on another aircraft's track). Gulf's worst cases are
 departures accelerating 43 -> 70 m/s between 45s updates, and formation
 pairs (A04/A05).
+
+## Realistic radar
+
+The radar above is the original simulation: 150 m everywhere, every
+aircraft seen, nothing false. ingestion/radar_model.py replaces it with
+one notional radar per region -- range and bearing errors (so ~50 m
+close in, ~370 m per axis at 200 km), detection that falls off with
+range, a radar horizon, and clutter -- and each contact carries its own
+accuracy, which fusion uses as its R (`engine.tick_from_row`). Every
+scoring tool takes `--radar model` and regenerates a stored window's
+radar from its ADS-B (seeded).
+
+Same validation windows, scored once after the code was frozen:
+
+| Window | Aircraft passing (old radar) | Realistic radar | Contacts correct | Fused error p50 / p95 | Clutter contacts |
+|---|---|---|---|---|---|
+| NYC 2026-10-16 18:08-18:23 UTC | 82.8% (154/186) | **97.1%** (170/175) | 98.4% | 30 / 76 m | 196 |
+| Gulf 2026-10-12 04:00-04:15 UTC | 100.0% (122/122) | **98.5%** (64/65) | 99.7% | 15 / 51 m | 159 |
+| Gulf 2026-10-13 02:00-02:15 UTC | 100.0% (130/130) | **100.0%** (70/70) | 99.5% | 12 / 44 m | 178 |
+| Gulf 2026-10-14 04:30-04:45 UTC | 96.7% (117/121) | **97.3%** (72/74) | 99.6% | 14 / 55 m | 186 |
+
+- Association still clears the 90% target everywhere. NYC all-traffic
+  *improves* (82.8% -> 97.1%) for a reason that isn't to fusion's
+  credit: the terminal radar can't see most taxiing aircraft (below its
+  horizon), and ground traffic was where NYC lost it.
+- Fewer aircraft are scored on the Gulf (65-74 vs 121-130): one radar
+  covers part of the region, as one radar would.
+- Gulf fused error is lower (p50 12-15 m vs 23 m): most Gulf contacts
+  in coverage are well inside 200 km, where the realistic radar is more
+  accurate than a flat 150 m, and fusion now knows which contacts those
+  are.
+- Clutter (12 false contacts a minute) didn't land on aircraft tracks
+  once the gate was capped; development windows before the cap had
+  went-dark false alarms from exactly that (anomaly/README.md).
 
 ## Known limitations
 

@@ -37,6 +37,7 @@ def load(name, relpath):
 
 regions = load("dt_regions", "ingestion/regions.py")
 radar_truth = load("dt_radar_truth", "ingestion/radar_truth.py")
+radar_model = load("radar_model", "ingestion/radar_model.py")  # radar_sim imports it by name
 radar_sim = load("dt_radar_sim", "ingestion/radar_sim.py")
 detectors = load("dt_detectors", "anomaly/detectors.py")
 inject = load("dt_inject", "anomaly/inject.py")

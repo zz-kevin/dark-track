@@ -17,6 +17,8 @@ exactly that link, so this module recovers it:
     dead-reckoned forward by the latency lands within a few noise std
     devs of the contact. A contact with two plausible sources (or none)
     is left unlabeled rather than guessed, and counted.
+  - Clutter from the realistic radar (radar_model.py) carries
+    truth_tick_id = CLUTTER and is counted, not labelled.
 """
 
 import bisect
@@ -24,6 +26,7 @@ import math
 from datetime import timedelta
 
 METERS_PER_DEG_LAT = 111320.0
+CLUTTER = -1  # truth_tick_id of a false contact (radar_model.CLUTTER)
 
 
 def advance(lat, lon, velocity, heading, seconds):
@@ -91,9 +94,12 @@ def label(ticks, latency_min=1.0, latency_max=4.0, noise_std_m=150.0):
     slack = timedelta(seconds=0.05)
 
     labels = {}
-    stats = {"exact": 0, "inferred": 0, "ambiguous": 0, "unmatched": 0}
+    stats = {"exact": 0, "inferred": 0, "ambiguous": 0, "unmatched": 0, "clutter": 0}
     for r in ticks:
         if r["source"] != "radar":
+            continue
+        if r.get("truth_tick_id") == CLUTTER:
+            stats["clutter"] += 1  # a false contact: no aircraft to label it with
             continue
         if r.get("truth_tick_id") is not None:
             src = by_id.get(r["truth_tick_id"])

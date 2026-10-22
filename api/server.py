@@ -18,7 +18,7 @@ Endpoints:
     GET /api/alerts?limit=50           latest anomaly episodes
     GET /api/windows                   stored 15-min windows worth replaying
     GET /api/candidates?start=&end=&region=   callsigns an anomaly can be injected on
-    GET /api/replay?start=&end=&region=[&step=6][&inject=went_dark|kinematic&target=CALLSIGN]
+    GET /api/replay?start=&end=&region=[&step=6][&inject=went_dark|kinematic&target=CALLSIGN][&radar=stored|model]
 """
 
 import argparse
@@ -70,9 +70,10 @@ def _replay(q):
     step = min(max(float(q.get("step", 6)), 1.0), 60.0)
     kind, target = q.get("inject") or None, q.get("target") or None
     region = q.get("region") or None
-    key = (start, end, step, kind, target, region)
+    radar = q.get("radar") or "stored"
+    key = (start, end, step, kind, target, region, radar)
     if key not in _replay_cache:
-        _replay_cache[key] = replay.run(start, end, step, kind, target, region)
+        _replay_cache[key] = replay.run(start, end, step, kind, target, region, radar)
         while len(_replay_cache) > REPLAY_CACHE_SIZE:
             _replay_cache.popitem(last=False)
     _replay_cache.move_to_end(key)

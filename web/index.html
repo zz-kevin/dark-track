@@ -46,6 +46,12 @@
         <label id="target-label">Which plane
           <select id="inject-target" disabled title="The aircraft the event happens to"><option value="">&mdash;</option></select>
         </label>
+        <label><span class="step">3</span> Radar
+          <select id="radar-kind" title="How the simulated radar behaves">
+            <option value="stored">Simple &mdash; sees every plane, same accuracy everywhere</option>
+            <option value="model">Realistic &mdash; one radar site: range limits, fuzzier far away, false echoes</option>
+          </select>
+        </label>
         <button id="load-replay" class="primary">&#9654; Play this recording</button>
         <p id="replay-note" class="note"></p>
 
