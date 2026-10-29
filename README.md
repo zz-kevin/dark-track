@@ -47,16 +47,16 @@ Against the success criteria in [`docs/PROBLEM.md`](docs/PROBLEM.md):
 | Went-dark detection | within silence + 1 interval | 93.3–98.3% of injected events |
 | Throughput | 150 tracks, < 500 ms | 100% under 500 ms at ~510 tracks (max 315 ms) |
 
-All from validation windows nothing was tuned on: three Gulf windows
+All measured on validation windows that nothing was tuned on: three Gulf windows
 and a fresh daytime NYC capture. NYC all-traffic accuracy is the one
-miss -- taxiing aircraft closer together than the radar can resolve.
+miss: taxiing aircraft closer together than the radar can resolve.
 
 With the **realistic radar** (`--radar model`: one radar site per
-region, accuracy that degrades with range, a horizon, false echoes --
+region, accuracy that degrades with range, a horizon, false echoes; see
 [`ingestion/README.md`](ingestion/README.md)), on the same windows:
-fusion 97.1-100%; went-dark 93.0-99.2% of the events the radar can see,
-false alarms 0-2.8%; maneuver detection 57-66% on the Gulf, down from
-83-90%, all of it from aircraft outside the one radar's coverage.
+fusion 97.1–100%; went-dark 93.0–99.2% of the events the radar can see,
+false alarms 0–2.8%; maneuver detection 57–66% on the Gulf, down from
+83–90%, all of it from aircraft outside the one radar's coverage.
 
 ## Running it
 
